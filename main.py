@@ -52,8 +52,65 @@ class Message(Base):
     created_at = Column(DateTime, default=datetime.now)
     conversation = relationship("Conversation", back_populates="messages")
 
+class UserData(Base):
+    __tablename__ = "user_data"
+    id = Column(Integer, primary_key=True)
+    key = Column(String, unique=True)
+    value = Column(Text)
+    updated_at = Column(DateTime, default=datetime.now)
+
 Base.metadata.create_all(engine)
 DBSession = sessionmaker(bind=engine)
+
+def get_user_data(db):
+    rows = db.query(UserData).all()
+    return {r.key: r.value for r in rows}
+
+def set_user_data(db, key, value):
+    row = db.query(UserData).filter(UserData.key == key).first()
+    if row:
+        row.value = str(value)
+        row.updated_at = datetime.now()
+    else:
+        db.add(UserData(key=key, value=str(value)))
+    db.commit()
+
+def extract_user_data_from_message(message, ai_response):
+    prompt = f"""Analyse ce message d'un utilisateur et la réponse du coach.
+Extrait UNIQUEMENT les informations factuelles importantes sur l'utilisateur.
+
+Message utilisateur: {message}
+Réponse coach: {ai_response}
+
+Retourne UNIQUEMENT un JSON valide avec les clés pertinentes parmi :
+- name (prénom)
+- age (age en chiffre)
+- weight (poids en kg, chiffre)
+- height (taille en cm, chiffre)
+- goal (objectif principal)
+- level (debutant/intermediaire/avance)
+- squat_weight (charge squat en kg)
+- bench_weight (charge développé couché en kg)
+- deadlift_weight (charge soulevé de terre en kg)
+- sessions_per_week (séances par semaine)
+- last_session_date (date dernière séance)
+- streak (jours consécutifs)
+- calories (calories journalières)
+
+Si aucune info n'est trouvée retourne {{}}.
+Ne retourne QUE le JSON, sans explication."""
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300,
+        )
+        text = response.choices[0].message.content.strip()
+        text = text.replace("```json", "").replace("```", "").strip()
+        return json.loads(text)
+    except:
+        return {}
 
 def calculate_angle(a, b, c):
     a = np.array(a)
@@ -228,6 +285,10 @@ Profil de l'athlète :
 - Taille : {user_profile.get('height', 'Non renseigné')} cm
 - Niveau : {user_profile.get('level', 'Non renseigné')}
 - Objectif : {user_profile.get('goal', 'Non renseigné')}
+- Squat : {user_profile.get('squat_weight', 'Non renseigné')} kg
+- Développé couché : {user_profile.get('bench_weight', 'Non renseigné')} kg
+- Soulevé de terre : {user_profile.get('deadlift_weight', 'Non renseigné')} kg
+- Séances/semaine : {user_profile.get('sessions_per_week', 'Non renseigné')}
 """
 
     system_prompt = f"""Tu es un coach sportif IA nouvelle génération. Tu parles comme un vrai coach qui connaît son athlète, pas comme un robot.
@@ -257,7 +318,6 @@ QUAND TU ANALYSES UNE VIDÉO, structure TOUJOURS comme ça :
 QUAND TU RÉPONDS À UNE QUESTION :
 - Réponse directe en 3-5 phrases max
 - Toujours terminer par un conseil actionnable
-- Si c'est une question sur un exercice, donne un conseil technique précis
 
 Tu connais l'historique des échanges et tu t'en souviens.
 Réponds toujours en français."""
@@ -334,12 +394,19 @@ async def chat(
 
     user_text = message if message else "Analyse cette vidéo et donne-moi des conseils détaillés"
 
+    # Profil depuis Flutter + données sauvegardées en base
     profile_dict = {}
     if user_profile:
         try:
             profile_dict = json.loads(user_profile)
         except:
             pass
+
+    # Enrichir avec les données sauvegardées
+    saved_data = get_user_data(db)
+    for k, v in saved_data.items():
+        if k not in profile_dict or not profile_dict[k]:
+            profile_dict[k] = v
 
     history = db.query(Message).filter(Message.conversation_id == conv_id).order_by(Message.created_at).all()
     history_list = [{"role": m.role, "content": m.content} for m in history]
@@ -349,6 +416,16 @@ async def chat(
     full_response = ai_response
     if video_data:
         full_response = build_video_table(video_data) + ai_response
+        # Sauvegarder le score squat
+        set_user_data(db, "last_squat_score", str(video_data.get('score', '')))
+        set_user_data(db, "last_squat_reps", str(video_data.get('reps', '')))
+        set_user_data(db, "last_squat_date", datetime.now().strftime("%d/%m/%Y"))
+
+    # Extraire et sauvegarder les nouvelles infos du message
+    extracted = extract_user_data_from_message(user_text, ai_response)
+    for k, v in extracted.items():
+        if v and str(v).strip() and str(v) != "None":
+            set_user_data(db, k, str(v))
 
     user_msg = Message(conversation_id=conv_id, role="user", content=user_text, video_filename=video_filename)
     assistant_msg = Message(conversation_id=conv_id, role="assistant", content=full_response)
@@ -366,4 +443,25 @@ async def chat(
         "response": full_response,
         "video_data": video_data,
         "video_filename": video_filename,
+        "updated_user_data": extracted,
     }
+
+@app.get("/user-data/")
+async def get_all_user_data():
+    db = DBSession()
+    data = get_user_data(db)
+    db.close()
+    return data
+
+@app.put("/user-data/")
+async def update_user_data(data: str = Form(...)):
+    db = DBSession()
+    try:
+        parsed = json.loads(data)
+        for k, v in parsed.items():
+            if v:
+                set_user_data(db, k, str(v))
+    except:
+        pass
+    db.close()
+    return {"message": "updated"}

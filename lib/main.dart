@@ -15,6 +15,7 @@ const kBg = Color(0xFF0D0D0D);
 const kSidebar = Color(0xFF141414);
 const kCard = Color(0xFF1C1C1C);
 const kBorder = Color(0xFF2A2A2A);
+const String kBaseUrl = 'http://127.0.0.1:8000';
 
 class Clickable extends StatelessWidget {
   final Widget child;
@@ -53,24 +54,37 @@ class RootPage extends StatefulWidget {
 
 class _RootPageState extends State<RootPage> {
   int _currentIndex = 0;
+  Map<String, String> userData = {};
 
-  final List<Widget> _pages = const [
-    HomePage(),
-    ProgramsPage(),
-    CoachPage(),
-    ProgressPage(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    loadUserData();
+  }
+
+  Future<void> loadUserData() async {
+    try {
+      final response = await http.get(Uri.parse('$kBaseUrl/user-data/'));
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      setState(() => userData = data.map((k, v) => MapEntry(k, v.toString())));
+    } catch (e) {}
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
-      body: _pages[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          HomePage(userData: userData, onUserDataChanged: loadUserData),
+          ProgramsPage(userData: userData),
+          CoachPage(onMessageSent: loadUserData),
+          ProgressPage(userData: userData),
+        ],
+      ),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: kSidebar,
-          border: Border(top: BorderSide(color: kBorder)),
-        ),
+        decoration: const BoxDecoration(color: kSidebar, border: Border(top: BorderSide(color: kBorder))),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
           onTap: (i) => setState(() => _currentIndex = i),
@@ -96,17 +110,16 @@ class _RootPageState extends State<RootPage> {
 // ===================== PAGE ACCUEIL =====================
 
 class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+  final Map<String, String> userData;
+  final VoidCallback onUserDataChanged;
+  const HomePage({super.key, required this.userData, required this.onUserDataChanged});
 
   Widget _statCard(String label, String value, String unit, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 14, color: color)),
-          const Spacer(),
-        ]),
+        Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 14, color: color)),
         const SizedBox(height: 12),
         Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
         const SizedBox(height: 2),
@@ -117,6 +130,15 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final name = userData['name'] ?? 'Athlete';
+    final weight = userData['weight'] ?? '--';
+    final sessions = userData['sessions_per_week'] ?? '--';
+    final streak = userData['streak'] ?? '--';
+    final calories = userData['calories'] ?? '--';
+    final lastScore = userData['last_squat_score'] ?? '--';
+    final lastReps = userData['last_squat_reps'] ?? '--';
+    final lastDate = userData['last_squat_date'] ?? '';
+
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -124,18 +146,21 @@ class HomePage extends StatelessWidget {
           Row(children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text("Bonjour 👋", style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.4))),
-              const Text("Athlete", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+              Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
             ]),
             const Spacer(),
             Clickable(
-              onTap: () => showDialog(
-                context: context,
-                builder: (context) => Dialog(
-                  backgroundColor: kBg,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: const SizedBox(width: 500, height: 600, child: ProfilePage()),
-                ),
-              ),
+              onTap: () async {
+                await showDialog(
+                  context: context,
+                  builder: (context) => Dialog(
+                    backgroundColor: kBg,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: SizedBox(width: 500, height: 600, child: ProfilePage(userData: userData)),
+                  ),
+                );
+                onUserDataChanged();
+              },
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
@@ -144,6 +169,8 @@ class HomePage extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: 24),
+
+          // Bannière IA
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
@@ -158,9 +185,11 @@ class HomePage extends StatelessWidget {
                 Text("Coach IA", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
               ]),
               const SizedBox(height: 8),
-              const Text("Prêt pour ta prochaine séance ?", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text("Envoie une vidéo ou pose une question à ton coach.", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13)),
+              Text("Prêt pour ta prochaine séance, $name ?", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              if (lastDate.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text("Dernière analyse : Score $lastScore/100 · $lastReps reps · $lastDate", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
+              ],
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {},
@@ -170,39 +199,44 @@ class HomePage extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 24),
-          const Text("CETTE SEMAINE", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+
+          const Text("MON PROFIL", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 12),
           GridView.count(
             crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.5,
             children: [
-              _statCard("Séances", "3", "/ 5", Icons.bolt, kOrange),
-              _statCard("Calories", "2,450", "kcal", Icons.local_fire_department, Colors.red),
-              _statCard("Poids", "78", "kg", Icons.monitor_weight_outlined, Colors.blue),
-              _statCard("Streak", "7", "jours", Icons.local_fire_department, Colors.amber),
+              _statCard("Poids", weight, "kg", Icons.monitor_weight_outlined, Colors.blue),
+              _statCard("Séances", sessions, "/ sem", Icons.bolt, kOrange),
+              _statCard("Streak", streak, "jours", Icons.local_fire_department, Colors.amber),
+              _statCard("Calories", calories, "kcal", Icons.local_fire_department, Colors.red),
             ],
           ),
           const SizedBox(height: 24),
-          const Text("PROCHAINE SÉANCE", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
-            child: Row(children: [
-              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.fitness_center, color: kOrange, size: 24)),
-              const SizedBox(width: 14),
-              const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text("Jambes & Squats", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-                SizedBox(height: 4),
-                Text("5 exercices · ~45 min", style: TextStyle(fontSize: 12, color: Colors.white38)),
-              ])),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(10)),
-                child: const Text("Commencer", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
-              ),
-            ]),
-          ),
+
+          // Dernière analyse squat
+          if (lastScore != '--') ...[
+            const Text("DERNIÈRE ANALYSE SQUAT", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kOrange.withOpacity(0.3))),
+              child: Row(children: [
+                Container(
+                  width: 56, height: 56,
+                  decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
+                  child: Center(child: Text("$lastScore", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kOrange))),
+                ),
+                const SizedBox(width: 14),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text("Score squat", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                  const SizedBox(height: 4),
+                  Text("$lastReps reps · $lastDate", style: const TextStyle(fontSize: 12, color: Colors.white38)),
+                ])),
+                const Text("/100", style: TextStyle(fontSize: 13, color: Colors.white38)),
+              ]),
+            ),
+          ],
         ]),
       ),
     );
@@ -212,7 +246,8 @@ class HomePage extends StatelessWidget {
 // ===================== PAGE PROGRAMMES =====================
 
 class ProgramsPage extends StatelessWidget {
-  const ProgramsPage({super.key});
+  final Map<String, String> userData;
+  const ProgramsPage({super.key, required this.userData});
 
   final List<Map<String, dynamic>> programs = const [
     {"title": "Prise de masse", "desc": "Gagner du muscle efficacement", "icon": Icons.trending_up, "color": Color(0xFFFF6B2B), "sessions": "4x/semaine"},
@@ -225,6 +260,10 @@ class ProgramsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final squat = userData['squat_weight'] ?? '--';
+    final bench = userData['bench_weight'] ?? '--';
+    final deadlift = userData['deadlift_weight'] ?? '--';
+
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -232,6 +271,21 @@ class ProgramsPage extends StatelessWidget {
           const Text("Programmes", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
           const SizedBox(height: 4),
           Text("Choisis ton programme d'entraînement", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
+
+          // Mes charges
+          if (squat != '--' || bench != '--' || deadlift != '--') ...[
+            const SizedBox(height: 24),
+            const Text("MES CHARGES", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 12),
+            Row(children: [
+              if (squat != '--') Expanded(child: _chargeCard("Squat", squat, kOrange)),
+              if (squat != '--') const SizedBox(width: 10),
+              if (bench != '--') Expanded(child: _chargeCard("Développé couché", bench, const Color(0xFF4CAF50))),
+              if (bench != '--') const SizedBox(width: 10),
+              if (deadlift != '--') Expanded(child: _chargeCard("Soulevé de terre", deadlift, const Color(0xFF2196F3))),
+            ]),
+          ],
+
           const SizedBox(height: 24),
           const Text("OBJECTIFS", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 12),
@@ -285,6 +339,18 @@ class ProgramsPage extends StatelessWidget {
           )).toList(),
         ]),
       ),
+    );
+  }
+
+  Widget _chargeCard(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3))),
+      child: Column(children: [
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.4), fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text("$value kg", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+      ]),
     );
   }
 }
@@ -349,7 +415,8 @@ class ProgramDetailDialog extends StatelessWidget {
 // ===================== PAGE COACH IA =====================
 
 class CoachPage extends StatefulWidget {
-  const CoachPage({super.key});
+  final VoidCallback onMessageSent;
+  const CoachPage({super.key, required this.onMessageSent});
   @override
   State<CoachPage> createState() => _CoachPageState();
 }
@@ -367,7 +434,7 @@ class _CoachPageState extends State<CoachPage> {
 
   Future<void> loadConversations() async {
     try {
-      final response = await http.get(Uri.parse('http://127.0.0.1:8000/conversations/'));
+      final response = await http.get(Uri.parse('$kBaseUrl/conversations/'));
       final data = jsonDecode(response.body) as List;
       setState(() => conversations = data.map((e) => Map<String, dynamic>.from(e)).toList());
     } catch (e) {}
@@ -375,7 +442,7 @@ class _CoachPageState extends State<CoachPage> {
 
   Future<void> createNewConversation() async {
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:8000/conversations/'));
+      var request = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/conversations/'));
       request.fields['objectif'] = 'general';
       request.fields['title'] = 'Nouvelle conversation';
       var response = await request.send();
@@ -390,7 +457,7 @@ class _CoachPageState extends State<CoachPage> {
 
   Future<void> deleteConversation(int id) async {
     try {
-      await http.delete(Uri.parse('http://127.0.0.1:8000/conversations/$id'));
+      await http.delete(Uri.parse('$kBaseUrl/conversations/$id'));
       setState(() {
         conversations.removeWhere((c) => c['id'] == id);
         if (activeConvId == id) activeConvId = null;
@@ -432,6 +499,7 @@ class _CoachPageState extends State<CoachPage> {
                     if (idx != -1) conversations[idx]['title'] = title;
                   });
                 },
+                onMessageSent: widget.onMessageSent,
               ),
             ),
           ]),
@@ -536,7 +604,8 @@ class _CoachPageState extends State<CoachPage> {
 // ===================== PAGE PROGRESSION =====================
 
 class ProgressPage extends StatelessWidget {
-  const ProgressPage({super.key});
+  final Map<String, String> userData;
+  const ProgressPage({super.key, required this.userData});
 
   Widget _statCard(String label, String value, String change, Color color) {
     return Container(
@@ -556,7 +625,7 @@ class ProgressPage extends StatelessWidget {
     );
   }
 
-  Widget _exerciseBar(String name, double progress, String value, Color color) {
+  Widget _exerciseBar(String name, String value, double progress, Color color) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -576,6 +645,18 @@ class ProgressPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final squat = userData['squat_weight'] ?? '--';
+    final bench = userData['bench_weight'] ?? '--';
+    final deadlift = userData['deadlift_weight'] ?? '--';
+    final weight = userData['weight'] ?? '--';
+    final sessions = userData['sessions_per_week'] ?? '--';
+    final streak = userData['streak'] ?? '--';
+    final lastScore = userData['last_squat_score'] ?? '--';
+
+    double squatProgress = squat != '--' ? (double.tryParse(squat) ?? 0) / 200 : 0.5;
+    double benchProgress = bench != '--' ? (double.tryParse(bench) ?? 0) / 150 : 0.5;
+    double deadliftProgress = deadlift != '--' ? (double.tryParse(deadlift) ?? 0) / 250 : 0.5;
+
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -584,29 +665,28 @@ class ProgressPage extends StatelessWidget {
           const SizedBox(height: 4),
           Text("Suis tes performances", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
           const SizedBox(height: 24),
-          const Text("CE MOIS", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const Text("MON PROFIL", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 12),
           GridView.count(
             crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.4,
             children: [
-              _statCard("Séances", "14", "+2 vs mois dernier", const Color(0xFF4CAF50)),
-              _statCard("Volume", "12,400 kg", "+850 kg", kOrange),
-              _statCard("Poids", "78 kg", "-1.2 kg", const Color(0xFF2196F3)),
-              _statCard("Streak", "7 jours", "🔥 Record !", Colors.amber),
+              _statCard("Poids", "$weight kg", "Mis à jour", Colors.blue),
+              _statCard("Séances", "$sessions /sem", "Cette semaine", kOrange),
+              _statCard("Streak", "$streak jours", "🔥 Continue !", Colors.amber),
+              _statCard("Score squat", "$lastScore/100", "Dernière analyse", const Color(0xFF4CAF50)),
             ],
           ),
           const SizedBox(height: 24),
-          const Text("ÉVOLUTION EXERCICES", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const Text("MES CHARGES", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
             child: Column(children: [
-              _exerciseBar("Squat", 0.78, "100 kg", kOrange),
-              _exerciseBar("Développé couché", 0.65, "80 kg", const Color(0xFF4CAF50)),
-              _exerciseBar("Soulevé de terre", 0.85, "120 kg", const Color(0xFF2196F3)),
-              _exerciseBar("Tractions", 0.50, "BW+10kg", Colors.purple),
+              _exerciseBar("Squat", squat != '--' ? "$squat kg" : "Non renseigné", squatProgress.clamp(0.0, 1.0), kOrange),
+              _exerciseBar("Développé couché", bench != '--' ? "$bench kg" : "Non renseigné", benchProgress.clamp(0.0, 1.0), const Color(0xFF4CAF50)),
+              _exerciseBar("Soulevé de terre", deadlift != '--' ? "$deadlift kg" : "Non renseigné", deadliftProgress.clamp(0.0, 1.0), const Color(0xFF2196F3)),
             ]),
           ),
           const SizedBox(height: 24),
@@ -622,7 +702,12 @@ class ProgressPage extends StatelessWidget {
                 const Text("Analyse de la semaine", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
               ]),
               const SizedBox(height: 12),
-              Text("Tu as réalisé 3 séances cette semaine avec une progression notable sur le squat (+5kg). Ta récupération semble bonne. Continue sur cette lancée et pense à augmenter ton apport protéique.", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.7), height: 1.5)),
+              Text(
+                userData['goal'] != null && userData['goal']!.isNotEmpty
+                    ? "Objectif : ${userData['goal']}. Continue à travailler et parle à ton coach pour un bilan complet !"
+                    : "Parle à ton coach IA pour obtenir un résumé personnalisé de ta semaine.",
+                style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.7), height: 1.5),
+              ),
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: () {},
@@ -643,7 +728,8 @@ class ProgressPage extends StatelessWidget {
 class ChatView extends StatefulWidget {
   final int convId;
   final Function(String) onTitleUpdate;
-  const ChatView({super.key, required this.convId, required this.onTitleUpdate});
+  final VoidCallback onMessageSent;
+  const ChatView({super.key, required this.convId, required this.onTitleUpdate, required this.onMessageSent});
   @override
   State<ChatView> createState() => _ChatViewState();
 }
@@ -664,7 +750,7 @@ class _ChatViewState extends State<ChatView> {
 
   Future<void> loadMessages() async {
     try {
-      final response = await http.get(Uri.parse('http://127.0.0.1:8000/conversations/${widget.convId}/messages'));
+      final response = await http.get(Uri.parse('$kBaseUrl/conversations/${widget.convId}/messages'));
       final data = jsonDecode(response.body) as List;
       setState(() => messages = data.map((e) => Map<String, dynamic>.from(e)).toList());
       _scrollToBottom();
@@ -697,7 +783,7 @@ class _ChatViewState extends State<ChatView> {
     _scrollToBottom();
 
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:8000/conversations/${widget.convId}/chat'));
+      var request = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/conversations/${widget.convId}/chat'));
       request.fields['message'] = text.isNotEmpty ? text : "Analyse cette vidéo et donne-moi des conseils détaillés";
       final prefs = await SharedPreferences.getInstance();
       final profile = {
@@ -725,6 +811,8 @@ class _ChatViewState extends State<ChatView> {
       if (messages.length == 2) {
         widget.onTitleUpdate(displayText.length > 40 ? displayText.substring(0, 40) + '...' : displayText);
       }
+
+      widget.onMessageSent();
       _scrollToBottom();
     } catch (e) {
       setState(() {
@@ -882,7 +970,8 @@ class _ChatViewState extends State<ChatView> {
 // ===================== PAGE PROFIL =====================
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  final Map<String, String> userData;
+  const ProfilePage({super.key, required this.userData});
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
@@ -905,22 +994,16 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    loadProfile();
-  }
-
-  Future<void> loadProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _nameController.text = prefs.getString('name') ?? '';
-      _ageController.text = prefs.getString('age') ?? '';
-      _weightController.text = prefs.getString('weight') ?? '';
-      _heightController.text = prefs.getString('height') ?? '';
-      _goalController.text = prefs.getString('goal') ?? '';
-      selectedLevel = prefs.getString('level') ?? 'debutant';
-    });
+    _nameController.text = widget.userData['name'] ?? '';
+    _ageController.text = widget.userData['age'] ?? '';
+    _weightController.text = widget.userData['weight'] ?? '';
+    _heightController.text = widget.userData['height'] ?? '';
+    _goalController.text = widget.userData['goal'] ?? '';
+    selectedLevel = widget.userData['level'] ?? 'debutant';
   }
 
   Future<void> saveProfile() async {
+    // Sauvegarder localement
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('name', _nameController.text);
     await prefs.setString('age', _ageController.text);
@@ -928,6 +1011,20 @@ class _ProfilePageState extends State<ProfilePage> {
     await prefs.setString('height', _heightController.text);
     await prefs.setString('goal', _goalController.text);
     await prefs.setString('level', selectedLevel);
+
+    // Sauvegarder dans la base de données backend
+    final data = {
+      'name': _nameController.text,
+      'age': _ageController.text,
+      'weight': _weightController.text,
+      'height': _heightController.text,
+      'goal': _goalController.text,
+      'level': selectedLevel,
+    };
+    var request = http.MultipartRequest('PUT', Uri.parse('$kBaseUrl/user-data/'));
+    request.fields['data'] = jsonEncode(data);
+    await request.send();
+
     setState(() => saved = true);
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) Navigator.pop(context);
