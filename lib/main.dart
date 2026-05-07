@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'dart:typed_data';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -126,14 +127,29 @@ class _MainPageState extends State<MainPage> {
                 const SizedBox(width: 10),
                 const Text("Gym AI Coach", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
                 const Spacer(),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: IconButton(
-                    onPressed: createNewConversation,
-                    icon: const Icon(Icons.edit_outlined, color: kOrange, size: 20),
-                    tooltip: "Nouveau chat",
-                  ),
-                ),
+                                MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: IconButton(
+                                    onPressed: () => showDialog(
+                                      context: context,
+                                      builder: (context) => Dialog(
+                                        backgroundColor: kBg,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                        child: SizedBox(width: 500, height: 600, child: const ProfilePage()),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.person_outline, color: Colors.white54, size: 20),
+                                    tooltip: "Mon profil",
+                                  ),
+                                ),
+                                MouseRegion(
+                                  cursor: SystemMouseCursors.click,
+                                  child: IconButton(
+                                    onPressed: createNewConversation,
+                                    icon: const Icon(Icons.edit_outlined, color: kOrange, size: 20),
+                                    tooltip: "Nouveau chat",
+                                  ),
+                                ),
               ]),
             ),
             Expanded(
@@ -537,5 +553,145 @@ class _ChatViewState extends State<ChatView> {
         ]),
       ),
     ]);
+  }
+}
+
+// ===================== PAGE PROFIL =====================
+
+class ProfilePage extends StatefulWidget {
+  const ProfilePage({super.key});
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final _nameController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _weightController = TextEditingController();
+  final _heightController = TextEditingController();
+  final _goalController = TextEditingController();
+  String selectedLevel = "debutant";
+  bool saved = false;
+
+  final levels = [
+    {"key": "debutant", "label": "Débutant"},
+    {"key": "intermediaire", "label": "Intermédiaire"},
+    {"key": "avance", "label": "Avancé"},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
+
+  Future<void> loadProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _nameController.text = prefs.getString('name') ?? '';
+      _ageController.text = prefs.getString('age') ?? '';
+      _weightController.text = prefs.getString('weight') ?? '';
+      _heightController.text = prefs.getString('height') ?? '';
+      _goalController.text = prefs.getString('goal') ?? '';
+      selectedLevel = prefs.getString('level') ?? 'debutant';
+    });
+  }
+
+  Future<void> saveProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('name', _nameController.text);
+    await prefs.setString('age', _ageController.text);
+    await prefs.setString('weight', _weightController.text);
+    await prefs.setString('height', _heightController.text);
+    await prefs.setString('goal', _goalController.text);
+    await prefs.setString('level', selectedLevel);
+    setState(() => saved = true);
+    Future.delayed(const Duration(seconds: 2), () => setState(() => saved = false));
+  }
+
+  Widget _field(String label, TextEditingController controller, {String? hint, TextInputType? type}) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 11, color: Colors.white38, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+      const SizedBox(height: 6),
+      TextField(
+        controller: controller,
+        keyboardType: type,
+        style: const TextStyle(color: Colors.white, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
+          filled: true,
+          fillColor: kCard,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
+      ),
+      const SizedBox(height: 16),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.person, color: kOrange, size: 20)),
+            const SizedBox(width: 12),
+            const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text("Mon profil", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              Text("Le coach adapte ses conseils à ton profil", style: TextStyle(fontSize: 12, color: Colors.white38)),
+            ]),
+          ]),
+          const SizedBox(height: 28),
+          _field("PRÉNOM", _nameController, hint: "Ex: Thomas"),
+          Row(children: [
+            Expanded(child: _field("ÂGE", _ageController, hint: "Ex: 25", type: TextInputType.number)),
+            const SizedBox(width: 16),
+            Expanded(child: _field("POIDS (kg)", _weightController, hint: "Ex: 80", type: TextInputType.number)),
+            const SizedBox(width: 16),
+            Expanded(child: _field("TAILLE (cm)", _heightController, hint: "Ex: 180", type: TextInputType.number)),
+          ]),
+          const Text("NIVEAU", style: TextStyle(fontSize: 11, color: Colors.white38, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+          const SizedBox(height: 8),
+          Row(children: levels.map((l) {
+            final isSelected = selectedLevel == l['key'];
+            return Expanded(child: Clickable(
+              onTap: () => setState(() => selectedLevel = l['key']!),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected ? kOrange : kCard,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: isSelected ? kOrange : kBorder),
+                ),
+                child: Text(l['label']!, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : Colors.white54, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
+              ),
+            ));
+          }).toList()),
+          const SizedBox(height: 16),
+          _field("OBJECTIF PRINCIPAL", _goalController, hint: "Ex: Prendre de la masse, perdre du poids, améliorer ma technique..."),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: saveProfile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: saved ? Colors.green : kOrange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: Text(saved ? "✓ Profil sauvegardé !" : "Sauvegarder", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ]),
+      ),
+    );
   }
 }
