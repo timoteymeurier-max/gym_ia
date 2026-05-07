@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import cv2
 import mediapipe as mp
+import numpy as np
 
 app = FastAPI()
 
@@ -17,12 +18,23 @@ app.add_middleware(
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+def calculate_angle(a, b, c):
+    a = np.array(a)
+    b = np.array(b)
+    c = np.array(c)
+    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
+    angle = np.abs(radians * 180.0 / np.pi)
+    if angle > 180.0:
+        angle = 360 - angle
+    return angle
+
 def analyze_video(video_path):
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose()
     cap = cv2.VideoCapture(video_path)
     frame_count = 0
-    detected = False
+    angles_knee = []
+    angles_hip = []
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -34,14 +46,46 @@ def analyze_video(video_path):
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = pose.process(rgb)
         if results.pose_landmarks:
-            detected = True
+            lm = results.pose_landmarks.landmark
+            hip = [lm[mp_pose.PoseLandmark.LEFT_HIP.value].x, lm[mp_pose.PoseLandmark.LEFT_HIP.value].y]
+            knee = [lm[mp_pose.PoseLandmark.LEFT_KNEE.value].x, lm[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+            ankle = [lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
+            shoulder = [lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x, lm[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+            angles_knee.append(calculate_angle(hip, knee, ankle))
+            angles_hip.append(calculate_angle(shoulder, hip, knee))
 
     cap.release()
 
-    if detected:
-        return "Mouvement detecte (pose trouvee)"
+    if not angles_knee:
+        return {
+            "analysis": "Aucune pose detectee dans la video.",
+            "knee_min": None,
+            "hip_avg": None,
+            "feedback": []
+        }
+
+    min_knee = round(float(np.min(angles_knee)), 1)
+    avg_hip = round(float(np.mean(angles_hip)), 1)
+
+    feedback = []
+    if min_knee > 90:
+        feedback.append("Squat pas assez profond - descends plus bas")
     else:
-        return "Aucune pose detectee"
+        feedback.append("Bonne profondeur de squat")
+
+    if avg_hip < 45:
+        feedback.append("Penche davantage le buste en avant")
+    else:
+        feedback.append("Inclinaison du buste correcte")
+
+    analysis = " | ".join(feedback)
+
+    return {
+        "analysis": analysis,
+        "knee_min": min_knee,
+        "hip_avg": avg_hip,
+        "feedback": feedback
+    }
 
 @app.post("/upload/")
 async def upload_video(file: UploadFile = File(...)):
@@ -49,9 +93,9 @@ async def upload_video(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
     print(f"VIDEO RECEIVED: {file.filename}")
-    analysis = analyze_video(file_path)
+    result = analyze_video(file_path)
     return {
         "message": "video uploaded successfully",
         "filename": file.filename,
-        "analysis": analysis
+        **result
     }
