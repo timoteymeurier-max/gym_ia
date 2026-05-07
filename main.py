@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
 import os
@@ -150,3 +150,83 @@ async def upload_video(file: UploadFile = File(...), objectif: str = "force"):
         **data,
         "coaching": coaching
     }
+
+    from fastapi import Form
+from typing import Optional
+
+conversation_history = []
+
+@app.post("/chat/")
+async def chat(
+    message: str = Form(...),
+    objectif: str = Form(default="force"),
+    file: Optional[UploadFile] = File(default=None)
+):
+    global conversation_history
+
+    user_content = message
+
+    # Si une vidéo est envoyée
+    if file and file.filename:
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
+        data = analyze_video(file_path)
+        if data:
+            user_content += f"""
+
+[Vidéo analysée : {file.filename}]
+- Répétitions : {data['reps']}
+- Angle genou min gauche : {data['knee_min_left']}°
+- Angle genou min droit : {data['knee_min_right']}°
+- Angle hanche moyen gauche : {data['hip_avg_left']}°
+- Angle hanche moyen droit : {data['hip_avg_right']}°
+- Angle dos : {data['back_avg']}°
+- Asymétrie : {data['symmetry']}°
+- Stabilité genou gauche : {data['knee_stability_left']}
+- Stabilité genou droit : {data['knee_stability_right']}
+"""
+
+    # Ajout du message dans l'historique
+    conversation_history.append({
+        "role": "user",
+        "content": user_content
+    })
+
+    # Système prompt
+    system_prompt = f"""Tu es un coach sportif expert en musculation, biomécanique et nutrition sportive.
+Tu accompagnes l'athlète comme un vrai coach personnel.
+Son objectif actuel : {objectif}.
+Tu analyses les vidéos de squats et autres exercices, tu donnes des conseils précis, bienveillants et professionnels.
+Tu réponds toujours en français."""
+
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            *conversation_history
+        ],
+        max_tokens=1000,
+    )
+
+    assistant_message = response.choices[0].message.content
+
+    conversation_history.append({
+        "role": "assistant",
+        "content": assistant_message
+    })
+
+    # Garder seulement les 20 derniers messages
+    if len(conversation_history) > 20:
+        conversation_history = conversation_history[-20:]
+
+    return {
+        "response": assistant_message,
+        "has_video": file is not None and file.filename != ""
+    }
+
+@app.delete("/chat/reset")
+async def reset_chat():
+    global conversation_history
+    conversation_history = []
+    return {"message": "Conversation réinitialisée"}
