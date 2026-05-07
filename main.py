@@ -11,6 +11,7 @@ import os
 import cv2
 import mediapipe as mp
 import numpy as np
+import json
 
 load_dotenv()
 
@@ -29,7 +30,6 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# Base de données
 engine = create_engine("sqlite:///sessions.db")
 Base = declarative_base()
 
@@ -37,7 +37,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True)
     title = Column(String, default="Nouvelle conversation")
-    objectif = Column(String, default="force")
+    objectif = Column(String, default="general")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     messages = relationship("Message", back_populates="conversation", cascade="all, delete")
@@ -69,7 +69,9 @@ def analyze_video(video_path):
     mp_pose = mp.solutions.pose
     pose = mp_pose.Pose()
     cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
     frame_count = 0
+
     angles_knee_left = []
     angles_knee_right = []
     angles_hip_left = []
@@ -83,7 +85,7 @@ def analyze_video(video_path):
         if not ret:
             break
         frame_count += 1
-        if frame_count % 5 != 0:
+        if frame_count % 3 != 0:
             continue
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = pose.process(rgb)
@@ -95,8 +97,9 @@ def analyze_video(video_path):
             l_ankle = [lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].x, lm[mp_pose.PoseLandmark.LEFT_ANKLE.value].y]
             r_shoulder = [lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x, lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
             r_hip = [lm[mp_pose.PoseLandmark.RIGHT_HIP.value].x, lm[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
-            r_knee = [lm[mp_pose.PoseLandmark.RIGHT_KNEE.value].x, lm[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+            r_knee = [lm[mp_pose.PoseLandmark.RIGHT_KNEE.value].x, lm[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
             r_ankle = [lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x, lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
+
             angles_knee_left.append(calculate_angle(l_hip, l_knee, l_ankle))
             angles_knee_right.append(calculate_angle(r_hip, r_knee, r_ankle))
             angles_hip_left.append(calculate_angle(l_shoulder, l_hip, l_knee))
@@ -112,46 +115,151 @@ def analyze_video(video_path):
 
     reps = 0
     state = "up"
-    for angle in angles_knee_left:
+    rep_depths = []
+    descent_speeds = []
+    time_in_hole = []
+    descent_start = None
+    bottom_start = None
+
+    for i, angle in enumerate(angles_knee_left):
         if state == "up" and angle < 90:
             state = "down"
+            descent_start = i
+        elif state == "down" and angle < 75:
+            if bottom_start is None:
+                bottom_start = i
+            rep_depths.append(angle)
         elif state == "down" and angle > 150:
             state = "up"
             reps += 1
+            if descent_start is not None and bottom_start is not None:
+                descent_speeds.append((bottom_start - descent_start) * 3 / fps)
+                time_in_hole.append((i - bottom_start) * 3 / fps)
+            descent_start = None
+            bottom_start = None
+
+    min_knee_left = round(float(np.min(angles_knee_left)), 1)
+    min_knee_right = round(float(np.min(angles_knee_right)), 1)
+    avg_hip_left = round(float(np.mean(angles_hip_left)), 1)
+    avg_hip_right = round(float(np.mean(angles_hip_right)), 1)
+    avg_back = round(float(np.mean(angles_back)), 1)
+    symmetry = round(abs(min_knee_left - min_knee_right), 1)
+    stab_left = round(float(np.std(knee_x_left)) * 100, 2)
+    stab_right = round(float(np.std(knee_x_right)) * 100, 2)
+    avg_descent_time = round(float(np.mean(descent_speeds)), 2) if descent_speeds else None
+    avg_time_in_hole = round(float(np.mean(time_in_hole)), 2) if time_in_hole else None
+    max_depth = round(float(np.min(rep_depths)), 1) if rep_depths else min_knee_left
+
+    score = 100
+    if min_knee_left > 90: score -= 20
+    elif min_knee_left > 80: score -= 10
+    if symmetry > 10: score -= 15
+    elif symmetry > 5: score -= 7
+    if avg_back > 45: score -= 15
+    elif avg_back > 35: score -= 7
+    if stab_left > 8 or stab_right > 8: score -= 10
+    if avg_descent_time and avg_descent_time < 1.0: score -= 10
+    score = max(0, min(100, score))
 
     return {
         "reps": reps,
-        "knee_min_left": round(float(np.min(angles_knee_left)), 1),
-        "knee_min_right": round(float(np.min(angles_knee_right)), 1),
-        "hip_avg_left": round(float(np.mean(angles_hip_left)), 1),
-        "hip_avg_right": round(float(np.mean(angles_hip_right)), 1),
-        "back_avg": round(float(np.mean(angles_back)), 1),
-        "symmetry": round(abs(float(np.min(angles_knee_left)) - float(np.min(angles_knee_right))), 1),
-        "knee_stability_left": round(float(np.std(knee_x_left)) * 100, 2),
-        "knee_stability_right": round(float(np.std(knee_x_right)) * 100, 2),
+        "score": score,
+        "knee_min_left": min_knee_left,
+        "knee_min_right": min_knee_right,
+        "hip_avg_left": avg_hip_left,
+        "hip_avg_right": avg_hip_right,
+        "back_avg": avg_back,
+        "symmetry": symmetry,
+        "knee_stability_left": stab_left,
+        "knee_stability_right": stab_right,
+        "max_depth": max_depth,
+        "avg_descent_time": avg_descent_time,
+        "avg_time_in_hole": avg_time_in_hole,
+        "depth_interpretation": "Excellente profondeur" if min_knee_left < 70 else "Bonne profondeur" if min_knee_left < 90 else "Profondeur insuffisante",
+        "back_interpretation": "Dos bien droit" if avg_back < 25 else "Légère inclinaison" if avg_back < 40 else "Trop penché en avant",
+        "symmetry_interpretation": "Très bonne symétrie" if symmetry < 3 else "Symétrie correcte" if symmetry < 7 else "Asymétrie notable",
+        "speed_interpretation": "Descente trop rapide" if avg_descent_time and avg_descent_time < 1.0 else "Vitesse correcte" if avg_descent_time else "Non mesurable",
     }
 
-def get_ai_response(messages_history, user_message, objectif, video_data=None):
+def build_video_table(video_data):
+    descent = f"{video_data['avg_descent_time']}s" if video_data.get('avg_descent_time') else 'N/A'
+    hole = f"{video_data['avg_time_in_hole']}s" if video_data.get('avg_time_in_hole') else 'N/A'
+    return (
+        f"📊 **Analyse — Score {video_data.get('score', '?')}/100**\n\n"
+        f"| Métrique | Gauche | Droite |\n"
+        f"|----------|--------|--------|\n"
+        f"| Genou min | {video_data['knee_min_left']}° | {video_data['knee_min_right']}° |\n"
+        f"| Hanche moy | {video_data['hip_avg_left']}° | {video_data['hip_avg_right']}° |\n"
+        f"| Dos | {video_data['back_avg']}° | {video_data.get('back_interpretation', '')} |\n"
+        f"| Symétrie | {video_data['symmetry']}° | {video_data.get('symmetry_interpretation', '')} |\n"
+        f"| Vitesse descente | {descent} | {video_data.get('speed_interpretation', '')} |\n"
+        f"| Temps en bas | {hole} | - |\n"
+        f"| Reps | {video_data['reps']} | - |\n\n"
+    )
+
+def get_ai_response(messages_history, user_message, objectif, video_data=None, user_profile=None):
     content = user_message
+
     if video_data:
         content += f"""
 
-[Vidéo analysée]
-- Répétitions : {video_data['reps']}
-- Angle genou min gauche : {video_data['knee_min_left']}°
-- Angle genou min droit : {video_data['knee_min_right']}°
-- Angle hanche moyen gauche : {video_data['hip_avg_left']}°
-- Angle hanche moyen droit : {video_data['hip_avg_right']}°
-- Angle dos : {video_data['back_avg']}°
-- Asymétrie : {video_data['symmetry']}°
-- Stabilité genou gauche : {video_data['knee_stability_left']}
-- Stabilité genou droit : {video_data['knee_stability_right']}
+[Analyse vidéo complète]
+Score global : {video_data.get('score', '?')}/100
+Répétitions : {video_data['reps']}
+Genou gauche min : {video_data['knee_min_left']}° ({video_data.get('depth_interpretation', '')})
+Genou droit min : {video_data['knee_min_right']}°
+Hanche gauche moy : {video_data['hip_avg_left']}°
+Hanche droite moy : {video_data['hip_avg_right']}°
+Dos moy : {video_data['back_avg']}° ({video_data.get('back_interpretation', '')})
+Symétrie : {video_data['symmetry']}° ({video_data.get('symmetry_interpretation', '')})
+Stabilité genou G/D : {video_data['knee_stability_left']} / {video_data['knee_stability_right']}
+Vitesse descente : {video_data.get('avg_descent_time', 'N/A')}s ({video_data.get('speed_interpretation', '')})
+Temps en position basse : {video_data.get('avg_time_in_hole', 'N/A')}s
+Profondeur max : {video_data.get('max_depth', 'N/A')}°
 """
 
-    system_prompt = f"""Tu es un coach sportif expert en musculation, biomécanique et nutrition sportive.
-Tu accompagnes l'athlète comme un vrai coach personnel. Son objectif : {objectif}.
-Tu analyses les vidéos de squats, donnes des conseils précis, bienveillants et professionnels.
-Quand tu reçois des données vidéo, structure ta réponse avec les points forts, points faibles, conseils et recommandation de charge.
+    profile_text = ""
+    if user_profile:
+        profile_text = f"""
+Profil de l'athlète :
+- Prénom : {user_profile.get('name', 'Non renseigné')}
+- Âge : {user_profile.get('age', 'Non renseigné')} ans
+- Poids : {user_profile.get('weight', 'Non renseigné')} kg
+- Taille : {user_profile.get('height', 'Non renseigné')} cm
+- Niveau : {user_profile.get('level', 'Non renseigné')}
+- Objectif : {user_profile.get('goal', 'Non renseigné')}
+"""
+
+    system_prompt = f"""Tu es un coach sportif IA nouvelle génération. Tu parles comme un vrai coach qui connaît son athlète, pas comme un robot.
+
+{profile_text}
+
+TON STYLE :
+- Direct, motivant, accessible
+- Phrases courtes et percutantes
+- Utilise des emojis avec modération (max 3-4 par réponse)
+- Tutoie toujours l'athlète
+- Utilise le prénom si disponible
+- Jamais plus de 200 mots sauf si analyse vidéo détaillée
+
+QUAND TU ANALYSES UNE VIDÉO, structure TOUJOURS comme ça :
+**Ce que tu fais bien ✅**
+(1-2 points max, sois précis)
+
+**Ce qu'on améliore 🎯**
+(1-2 points max, avec correction concrète)
+
+**Conseil pour la prochaine séance 💡**
+(1 conseil actionnable et précis)
+
+**Charge** : Augmenter / Maintenir / Réduire — et pourquoi en 1 phrase
+
+QUAND TU RÉPONDS À UNE QUESTION :
+- Réponse directe en 3-5 phrases max
+- Toujours terminer par un conseil actionnable
+- Si c'est une question sur un exercice, donne un conseil technique précis
+
+Tu connais l'historique des échanges et tu t'en souviens.
 Réponds toujours en français."""
 
     history = [{"role": m["role"], "content": m["content"]} for m in messages_history]
@@ -164,10 +272,8 @@ Réponds toujours en français."""
     )
     return response.choices[0].message.content
 
-# ===== ENDPOINTS CONVERSATIONS =====
-
 @app.post("/conversations/")
-async def create_conversation(objectif: str = Form(default="force"), title: str = Form(default="Nouvelle conversation")):
+async def create_conversation(objectif: str = Form(default="general"), title: str = Form(default="Nouvelle conversation")):
     db = DBSession()
     conv = Conversation(title=title, objectif=objectif)
     db.add(conv)
@@ -207,7 +313,8 @@ async def get_messages(conv_id: int):
 async def chat(
     conv_id: int,
     message: str = Form(default=""),
-    file: Optional[UploadFile] = File(default=None)
+    file: Optional[UploadFile] = File(default=None),
+    user_profile: str = Form(default="")
 ):
     db = DBSession()
     conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
@@ -227,20 +334,27 @@ async def chat(
 
     user_text = message if message else "Analyse cette vidéo et donne-moi des conseils détaillés"
 
-    # Historique
+    profile_dict = {}
+    if user_profile:
+        try:
+            profile_dict = json.loads(user_profile)
+        except:
+            pass
+
     history = db.query(Message).filter(Message.conversation_id == conv_id).order_by(Message.created_at).all()
     history_list = [{"role": m.role, "content": m.content} for m in history]
 
-    # Réponse IA
-    ai_response = get_ai_response(history_list, user_text, conv.objectif, video_data)
+    ai_response = get_ai_response(history_list, user_text, conv.objectif, video_data, profile_dict)
 
-    # Sauvegarde messages
+    full_response = ai_response
+    if video_data:
+        full_response = build_video_table(video_data) + ai_response
+
     user_msg = Message(conversation_id=conv_id, role="user", content=user_text, video_filename=video_filename)
-    assistant_msg = Message(conversation_id=conv_id, role="assistant", content=ai_response)
+    assistant_msg = Message(conversation_id=conv_id, role="assistant", content=full_response)
     db.add(user_msg)
     db.add(assistant_msg)
 
-    # Titre auto si première question
     if len(history) == 0:
         conv.title = user_text[:40] + ("..." if len(user_text) > 40 else "")
 
@@ -249,7 +363,7 @@ async def chat(
     db.close()
 
     return {
-        "response": ai_response,
+        "response": full_response,
         "video_data": video_data,
         "video_filename": video_filename,
     }
