@@ -9,6 +9,12 @@ void main() {
   runApp(const MyApp());
 }
 
+const kOrange = Color(0xFFFF6B2B);
+const kBg = Color(0xFF0D0D0D);
+const kSidebar = Color(0xFF141414);
+const kCard = Color(0xFF1C1C1C);
+const kBorder = Color(0xFF2A2A2A);
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
@@ -16,8 +22,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6C63FF), brightness: Brightness.dark),
+        colorScheme: ColorScheme.fromSeed(seedColor: kOrange, brightness: Brightness.dark),
         useMaterial3: true,
+        scaffoldBackgroundColor: kBg,
       ),
       home: const MainPage(),
     );
@@ -31,238 +38,255 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  int _currentIndex = 0;
-  String selectedObjectif = "force";
+  List<Map<String, dynamic>> conversations = [];
+  int? activeConvId;
+  bool sidebarOpen = true;
 
-  final List<Map<String, String>> objectifs = [
-    {"key": "force", "label": "Force", "emoji": "💪"},
-    {"key": "fessiers", "label": "Fessiers", "emoji": "🍑"},
-    {"key": "quadriceps", "label": "Quadriceps", "emoji": "🦵"},
-    {"key": "endurance", "label": "Endurance", "emoji": "🏃"},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    loadConversations();
+  }
+
+  Future<void> loadConversations() async {
+    try {
+      final response = await http.get(Uri.parse('http://127.0.0.1:8000/conversations/'));
+      final data = jsonDecode(response.body) as List;
+      setState(() => conversations = data.map((e) => Map<String, dynamic>.from(e)).toList());
+    } catch (e) {}
+  }
+
+  Future<void> createNewConversation() async {
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:8000/conversations/'));
+      request.fields['objectif'] = 'general';
+      request.fields['title'] = 'Nouvelle conversation';
+      var response = await request.send();
+      var body = await response.stream.bytesToString();
+      final data = jsonDecode(body);
+      setState(() {
+        conversations.insert(0, Map<String, dynamic>.from(data));
+        activeConvId = data['id'];
+      });
+    } catch (e) {}
+  }
+
+  Future<void> deleteConversation(int id) async {
+    try {
+      await http.delete(Uri.parse('http://127.0.0.1:8000/conversations/$id'));
+      setState(() {
+        conversations.removeWhere((c) => c['id'] == id);
+        if (activeConvId == id) activeConvId = null;
+      });
+    } catch (e) {}
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F1A),
-      body: _currentIndex == 0
-          ? AnalysePage(selectedObjectif: selectedObjectif, objectifs: objectifs, onObjectifChanged: (val) => setState(() => selectedObjectif = val))
-          : ChatPage(selectedObjectif: selectedObjectif),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(color: const Color(0xFF1A1A2E), border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (i) => setState(() => _currentIndex = i),
-          backgroundColor: Colors.transparent,
-          selectedItemColor: const Color(0xFF6C63FF),
-          unselectedItemColor: Colors.white38,
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.videocam_outlined), activeIcon: Icon(Icons.videocam), label: "Analyse"),
-            BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline), activeIcon: Icon(Icons.chat_bubble), label: "Coach IA"),
-          ],
+      backgroundColor: kBg,
+      body: Row(children: [
+        // Sidebar
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          width: sidebarOpen ? 260 : 0,
+          child: sidebarOpen ? _buildSidebar() : const SizedBox(),
         ),
-      ),
-    );
-  }
-}
 
-// ===================== PAGE ANALYSE =====================
+        // Zone principale
+        Expanded(
+          child: Column(children: [
+            // Topbar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(color: kSidebar, border: Border(bottom: BorderSide(color: kBorder))),
+              child: Row(children: [
+                IconButton(
+                  onPressed: () => setState(() => sidebarOpen = !sidebarOpen),
+                  icon: Icon(Icons.menu, color: Colors.white.withOpacity(0.5)),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.fitness_center, color: kOrange, size: 18),
+                ),
+                const SizedBox(width: 10),
+                const Text("Gym AI Coach", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                const Spacer(),
+                IconButton(
+                  onPressed: createNewConversation,
+                  icon: const Icon(Icons.edit_outlined, color: kOrange, size: 20),
+                  tooltip: "Nouveau chat",
+                ),
+              ]),
+            ),
 
-class AnalysePage extends StatefulWidget {
-  final String selectedObjectif;
-  final List<Map<String, String>> objectifs;
-  final Function(String) onObjectifChanged;
-  const AnalysePage({super.key, required this.selectedObjectif, required this.objectifs, required this.onObjectifChanged});
-  @override
-  State<AnalysePage> createState() => _AnalysePageState();
-}
-
-class _AnalysePageState extends State<AnalysePage> {
-  String videoName = "";
-  bool isLoading = false;
-  Uint8List? videoBytes;
-  Map<String, dynamic>? analysisData;
-
-  Future<void> pickVideo() async {
-    FilePickerResult? picked = await FilePicker.platform.pickFiles(type: FileType.video, withData: true);
-    if (picked != null) {
-      setState(() { videoName = picked.files.single.name; videoBytes = picked.files.single.bytes; analysisData = null; });
-    }
-  }
-
-  Future<void> uploadVideo() async {
-    if (videoBytes == null) return;
-    setState(() { isLoading = true; analysisData = null; });
-    try {
-      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:8000/upload/?objectif=${widget.selectedObjectif}'));
-      request.files.add(http.MultipartFile.fromBytes('file', videoBytes!, filename: videoName));
-      var response = await request.send();
-      var body = await response.stream.bytesToString();
-      setState(() { analysisData = jsonDecode(body); isLoading = false; });
-    } catch (e) {
-      setState(() { analysisData = {"error": "Erreur de connexion."}; isLoading = false; });
-    }
-  }
-
-  Widget _statCard(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.3))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [Icon(icon, size: 16, color: color), const SizedBox(width: 6), Expanded(child: Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)))]),
-        const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+            // Chat
+            Expanded(
+              child: activeConvId == null
+                  ? _buildWelcome()
+                  : ChatView(
+                      key: ValueKey(activeConvId),
+                      convId: activeConvId!,
+                      onTitleUpdate: (title) {
+                        setState(() {
+                          final idx = conversations.indexWhere((c) => c['id'] == activeConvId);
+                          if (idx != -1) conversations[idx]['title'] = title;
+                        });
+                      },
+                    ),
+            ),
+          ]),
+        ),
       ]),
     );
   }
 
-  Widget _buildResults() {
-    if (analysisData == null) return const SizedBox();
-    if (analysisData!.containsKey('error')) {
-      return Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF2E1A1A), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.red.withOpacity(0.4))), child: Text(analysisData!['error'], style: const TextStyle(color: Colors.white)));
-    }
-    final d = analysisData!;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Container(
-        width: double.infinity, padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF6C63FF), Color(0xFF9C8FFF)]), borderRadius: BorderRadius.circular(20)),
-        child: Row(children: [
-          const Icon(Icons.analytics, color: Colors.white, size: 28), const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text("Analyse complète", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(videoName, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
-          ]),
-        ]),
+  Widget _buildSidebar() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: kSidebar,
+        border: Border(right: BorderSide(color: kBorder)),
       ),
-      const SizedBox(height: 16),
-      _statCard("RÉPÉTITIONS", "${d['reps']} reps", Icons.repeat, const Color(0xFF6C63FF)),
-      const SizedBox(height: 12),
-      const Text("ANGLES GENOU", style: TextStyle(fontSize: 11, color: Colors.white38, fontWeight: FontWeight.w600, letterSpacing: 1)),
-      const SizedBox(height: 8),
-      Row(children: [Expanded(child: _statCard("GAUCHE MIN", "${d['knee_min_left']}°", Icons.rotate_left, const Color(0xFF4CAF50))), const SizedBox(width: 10), Expanded(child: _statCard("DROIT MIN", "${d['knee_min_right']}°", Icons.rotate_right, const Color(0xFF4CAF50)))]),
-      const SizedBox(height: 12),
-      const Text("ANGLES HANCHE", style: TextStyle(fontSize: 11, color: Colors.white38, fontWeight: FontWeight.w600, letterSpacing: 1)),
-      const SizedBox(height: 8),
-      Row(children: [Expanded(child: _statCard("GAUCHE MOY", "${d['hip_avg_left']}°", Icons.rotate_left, const Color(0xFFFF9800))), const SizedBox(width: 10), Expanded(child: _statCard("DROIT MOY", "${d['hip_avg_right']}°", Icons.rotate_right, const Color(0xFFFF9800)))]),
-      const SizedBox(height: 12),
-      const Text("POSTURE", style: TextStyle(fontSize: 11, color: Colors.white38, fontWeight: FontWeight.w600, letterSpacing: 1)),
-      const SizedBox(height: 8),
-      Row(children: [Expanded(child: _statCard("ANGLE DOS", "${d['back_avg']}°", Icons.accessibility_new, const Color(0xFF2196F3))), const SizedBox(width: 10), Expanded(child: _statCard("SYMÉTRIE", "${d['symmetry']}°", Icons.compare_arrows, const Color(0xFF2196F3)))]),
-      const SizedBox(height: 12),
-      const Text("STABILITÉ GENOUX", style: TextStyle(fontSize: 11, color: Colors.white38, fontWeight: FontWeight.w600, letterSpacing: 1)),
-      const SizedBox(height: 8),
-      Row(children: [Expanded(child: _statCard("GAUCHE", "${d['knee_stability_left']}", Icons.show_chart, const Color(0xFFE91E63))), const SizedBox(width: 10), Expanded(child: _statCard("DROIT", "${d['knee_stability_right']}", Icons.show_chart, const Color(0xFFE91E63)))]),
-      const SizedBox(height: 24),
-      if (d['coaching'] != null)
-        Container(
-          width: double.infinity, padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.4))),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF6C63FF).withOpacity(0.2), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.psychology, color: Color(0xFF6C63FF), size: 20)),
-              const SizedBox(width: 12),
-              const Text("Coaching IA", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-            ]),
-            const SizedBox(height: 16),
-            SelectionArea(
-              child: MarkdownBody(
-                data: d['coaching'],
-                styleSheet: MarkdownStyleSheet(
-                  p: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.85), height: 1.6),
-                  strong: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),
-                  listBullet: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.85)),
-                ),
+      child: Column(children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: createNewConversation,
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text("Nouveau chat", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kOrange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
               ),
             ),
-          ]),
+          ),
         ),
-    ]);
+
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Align(alignment: Alignment.centerLeft, child: Text("RÉCENT", style: TextStyle(fontSize: 10, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2))),
+        ),
+
+        Expanded(
+          child: conversations.isEmpty
+              ? Center(child: Text("Aucune conversation", style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 12)))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  itemCount: conversations.length,
+                  itemBuilder: (context, index) {
+                    final conv = conversations[index];
+                    final isActive = conv['id'] == activeConvId;
+                    return GestureDetector(
+                      onTap: () => setState(() => activeConvId = conv['id']),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isActive ? kOrange.withOpacity(0.1) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: isActive ? kOrange.withOpacity(0.3) : Colors.transparent),
+                        ),
+                        child: Row(children: [
+                          Icon(Icons.chat_bubble_outline, size: 14, color: isActive ? kOrange : Colors.white38),
+                          const SizedBox(width: 8),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(
+                              conv['title'] ?? 'Conversation',
+                              style: TextStyle(fontSize: 13, color: isActive ? Colors.white : Colors.white60, fontWeight: isActive ? FontWeight.w600 : FontWeight.normal),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(conv['updated_at'] ?? '', style: const TextStyle(fontSize: 10, color: Colors.white24)),
+                          ])),
+                          GestureDetector(
+                            onTap: () => deleteConversation(conv['id']),
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(Icons.close, size: 13, color: Colors.white.withOpacity(0.2)),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ]),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF6C63FF).withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.fitness_center, size: 48, color: Color(0xFF6C63FF))),
-          const SizedBox(height: 16),
-          const Text("Gym AI Coach", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
-          const SizedBox(height: 4),
-          Text("Analyse ta posture en quelques secondes", style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.5))),
-          const SizedBox(height: 30),
-          const Align(alignment: Alignment.centerLeft, child: Text("TON OBJECTIF", style: TextStyle(fontSize: 11, color: Colors.white38, fontWeight: FontWeight.w600, letterSpacing: 1))),
-          const SizedBox(height: 10),
-          Row(children: widget.objectifs.map((o) {
-            final isSelected = widget.selectedObjectif == o['key'];
-            return Expanded(child: GestureDetector(
-              onTap: () => widget.onObjectifChanged(o['key']!),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(color: isSelected ? const Color(0xFF6C63FF) : const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(12), border: Border.all(color: isSelected ? const Color(0xFF6C63FF) : Colors.white.withOpacity(0.1))),
-                child: Column(children: [
-                  Text(o['emoji']!, style: const TextStyle(fontSize: 20)),
-                  const SizedBox(height: 4),
-                  Text(o['label']!, style: TextStyle(fontSize: 11, color: isSelected ? Colors.white : Colors.white54, fontWeight: FontWeight.w600)),
-                ]),
-              ),
-            ));
-          }).toList()),
-          const SizedBox(height: 24),
-          GestureDetector(
-            onTap: pickVideo,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 32),
-              decoration: BoxDecoration(color: videoBytes != null ? const Color(0xFF6C63FF).withOpacity(0.15) : const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: videoBytes != null ? const Color(0xFF6C63FF) : Colors.white.withOpacity(0.1), width: 1.5)),
-              child: Column(children: [
-                Icon(videoBytes != null ? Icons.check_circle_outline : Icons.video_library_outlined, size: 40, color: videoBytes != null ? const Color(0xFF6C63FF) : Colors.white.withOpacity(0.4)),
-                const SizedBox(height: 12),
-                Text(videoBytes != null ? videoName : "Appuie pour importer une vidéo", style: TextStyle(fontSize: 14, color: videoBytes != null ? Colors.white : Colors.white.withOpacity(0.4), fontWeight: videoBytes != null ? FontWeight.w600 : FontWeight.normal), textAlign: TextAlign.center),
-                if (videoBytes != null) ...[const SizedBox(height: 6), Text("Appuie pour changer", style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.3)))],
-                const SizedBox(height: 8),
-                Text("💡 Pour une analyse optimale, filme-toi de profil", style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3)), textAlign: TextAlign.center),
-              ]),
-            ),
+  Widget _buildWelcome() {
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: kOrange.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: kOrange.withOpacity(0.3))),
+          child: const Icon(Icons.fitness_center, size: 48, color: kOrange),
+        ),
+        const SizedBox(height: 24),
+        const Text("Gym AI Coach", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+        const SizedBox(height: 8),
+        Text("Ton coach sportif IA personnel", style: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.35))),
+        const SizedBox(height: 8),
+        Text("Pose une question ou envoie une vidéo de squat", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.2))),
+        const SizedBox(height: 32),
+        ElevatedButton.icon(
+          onPressed: createNewConversation,
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text("Démarrer une conversation", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: kOrange,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
           ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity, height: 56,
-            child: ElevatedButton(
-              onPressed: videoBytes == null || isLoading ? null : uploadVideo,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF), disabledBackgroundColor: const Color(0xFF6C63FF).withOpacity(0.3), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
-              child: isLoading
-                  ? const Row(mainAxisAlignment: MainAxisAlignment.center, children: [SizedBox(height: 22, width: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)), SizedBox(width: 12), Text("Analyse en cours...", style: TextStyle(color: Colors.white, fontSize: 16))])
-                  : const Text("Analyser", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-            ),
-          ),
-          const SizedBox(height: 32),
-          _buildResults(),
-        ]),
-      ),
+        ),
+      ]),
     );
   }
 }
 
-// ===================== PAGE CHAT =====================
+// ===================== CHAT VIEW =====================
 
-class ChatPage extends StatefulWidget {
-  final String selectedObjectif;
-  const ChatPage({super.key, required this.selectedObjectif});
+class ChatView extends StatefulWidget {
+  final int convId;
+  final Function(String) onTitleUpdate;
+  const ChatView({super.key, required this.convId, required this.onTitleUpdate});
   @override
-  State<ChatPage> createState() => _ChatPageState();
+  State<ChatView> createState() => _ChatViewState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatViewState extends State<ChatView> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> messages = [];
   bool isLoading = false;
   Uint8List? pendingVideoBytes;
   String? pendingVideoName;
+
+  @override
+  void initState() {
+    super.initState();
+    loadMessages();
+  }
+
+  Future<void> loadMessages() async {
+    try {
+      final response = await http.get(Uri.parse('http://127.0.0.1:8000/conversations/${widget.convId}/messages'));
+      final data = jsonDecode(response.body) as List;
+      setState(() => messages = data.map((e) => Map<String, dynamic>.from(e)).toList());
+      _scrollToBottom();
+    } catch (e) {}
+  }
 
   Future<void> pickVideo() async {
     FilePickerResult? picked = await FilePicker.platform.pickFiles(type: FileType.video, withData: true);
@@ -274,8 +298,9 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty && pendingVideoBytes == null) return;
+    final displayText = text.isNotEmpty ? text : "Analyse cette vidéo";
     setState(() {
-      messages.add({"role": "user", "text": text.isNotEmpty ? text : "Analyse cette vidéo", "video": pendingVideoName});
+      messages.add({"role": "user", "content": displayText, "video_filename": pendingVideoName});
       isLoading = true;
     });
     _controller.clear();
@@ -284,20 +309,45 @@ class _ChatPageState extends State<ChatPage> {
     pendingVideoBytes = null;
     pendingVideoName = null;
     _scrollToBottom();
+
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:8000/chat/'));
-      request.fields['message'] = text.isNotEmpty ? text : "Analyse cette vidéo et donne-moi des conseils";
-      request.fields['objectif'] = widget.selectedObjectif;
+      var request = http.MultipartRequest('POST', Uri.parse('http://127.0.0.1:8000/conversations/${widget.convId}/chat'));
+      request.fields['message'] = text.isNotEmpty ? text : "Analyse cette vidéo et donne-moi des conseils détaillés";
       if (videoBytes != null && videoName != null) {
         request.files.add(http.MultipartFile.fromBytes('file', videoBytes, filename: videoName));
       }
       var response = await request.send();
       var body = await response.stream.bytesToString();
       final json = jsonDecode(body);
-      setState(() { messages.add({"role": "assistant", "text": json['response']}); isLoading = false; });
+
+      String assistantContent = json['response'] ?? '';
+      if (json['video_data'] != null) {
+        final v = json['video_data'];
+        assistantContent = "📊 **Données bioméchaniques**\n\n"
+            "| Métrique | Gauche | Droite |\n"
+            "|----------|--------|--------|\n"
+            "| Genou min | ${v['knee_min_left']}° | ${v['knee_min_right']}° |\n"
+            "| Hanche moy | ${v['hip_avg_left']}° | ${v['hip_avg_right']}° |\n"
+            "| Dos moy | ${v['back_avg']}° | - |\n"
+            "| Symétrie | ${v['symmetry']}° | - |\n"
+            "| Reps | ${v['reps']} | - |\n\n"
+            + assistantContent;
+      }
+
+      setState(() {
+        messages.add({"role": "assistant", "content": assistantContent, "video_filename": null});
+        isLoading = false;
+      });
+
+      if (messages.length == 2) {
+        widget.onTitleUpdate(displayText.length > 40 ? displayText.substring(0, 40) + '...' : displayText);
+      }
       _scrollToBottom();
     } catch (e) {
-      setState(() { messages.add({"role": "assistant", "text": "Erreur de connexion au serveur."}); isLoading = false; });
+      setState(() {
+        messages.add({"role": "assistant", "content": "Erreur de connexion au serveur.", "video_filename": null});
+        isLoading = false;
+      });
     }
   }
 
@@ -309,160 +359,146 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  Future<void> resetChat() async {
-    await http.delete(Uri.parse('http://127.0.0.1:8000/chat/reset'));
-    setState(() => messages.clear());
-  }
-
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(children: [
-        // Header
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          decoration: BoxDecoration(color: const Color(0xFF1A1A2E), border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))),
-          child: Row(children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF6C63FF).withOpacity(0.2), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.psychology, color: Color(0xFF6C63FF), size: 20)),
-            const SizedBox(width: 12),
-            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text("Coach IA", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-              Text("Spécialiste musculation & biomécanique", style: TextStyle(fontSize: 11, color: Colors.white38)),
-            ])),
-            IconButton(onPressed: resetChat, icon: const Icon(Icons.refresh, color: Colors.white38), tooltip: "Réinitialiser"),
-          ]),
-        ),
-
-        // Messages
-        Expanded(
-          child: messages.isEmpty
-              ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.chat_bubble_outline, size: 48, color: Colors.white.withOpacity(0.1)),
-                  const SizedBox(height: 12),
-                  Text("Pose une question à ton coach IA\nou envoie une vidéo à analyser", style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14), textAlign: TextAlign.center),
-                ]))
-              : ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: messages.length + (isLoading ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == messages.length) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Row(children: [
-                          SizedBox(width: 12),
-                          SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF))),
-                          SizedBox(width: 12),
-                          Text("Coach en train de réfléchir...", style: TextStyle(color: Colors.white38, fontSize: 13)),
-                        ]),
-                      );
-                    }
-                    final msg = messages[index];
-                    final isUser = msg['role'] == 'user';
+    return Column(children: [
+      Expanded(
+        child: messages.isEmpty && !isLoading
+            ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.chat_bubble_outline, size: 36, color: Colors.white.withOpacity(0.08)),
+                const SizedBox(height: 12),
+                Text("Pose une question ou envoie une vidéo", style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14)),
+              ]))
+            : ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                itemCount: messages.length + (isLoading ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == messages.length) {
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
-                        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (!isUser) ...[
-                            Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: const Color(0xFF6C63FF).withOpacity(0.2), shape: BoxShape.circle), child: const Icon(Icons.psychology, size: 16, color: Color(0xFF6C63FF))),
-                            const SizedBox(width: 8),
-                          ],
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: isUser ? const Color(0xFF6C63FF) : const Color(0xFF1A1A2E),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(18), topRight: const Radius.circular(18),
-                                  bottomLeft: Radius.circular(isUser ? 18 : 4),
-                                  bottomRight: Radius.circular(isUser ? 4 : 18),
-                                ),
-                                border: isUser ? null : Border.all(color: Colors.white.withOpacity(0.05)),
-                              ),
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                if (msg['video'] != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Row(children: [
-                                      const Icon(Icons.videocam, size: 14, color: Colors.white70),
-                                      const SizedBox(width: 4),
-                                      Flexible(child: Text(msg['video'], style: const TextStyle(fontSize: 11, color: Colors.white70))),
-                                    ]),
-                                  ),
-                                isUser
-                                    ? SelectableText(msg['text'], style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.5))
-                                    : SelectionArea(
-                                        child: MarkdownBody(
-                                          data: msg['text'],
-                                          styleSheet: MarkdownStyleSheet(
-                                            p: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.85), height: 1.5),
-                                            strong: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),
-                                            listBullet: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.85)),
-                                          ),
-                                        ),
-                                      ),
-                              ]),
-                            ),
-                          ),
-                        ],
-                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(children: [
+                        Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.psychology, size: 14, color: kOrange)),
+                        const SizedBox(width: 10),
+                        Text("Coach en train de réfléchir...", style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13)),
+                        const SizedBox(width: 10),
+                        const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 1.5, color: kOrange)),
+                      ]),
                     );
-                  },
-                ),
-        ),
+                  }
+                  final msg = messages[index];
+                  final isUser = msg['role'] == 'user';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (!isUser) ...[
+                          Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.psychology, size: 14, color: kOrange)),
+                          const SizedBox(width: 10),
+                        ],
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isUser ? kOrange : kCard,
+                              borderRadius: BorderRadius.only(
+                                topLeft: const Radius.circular(16), topRight: const Radius.circular(16),
+                                bottomLeft: Radius.circular(isUser ? 16 : 4),
+                                bottomRight: Radius.circular(isUser ? 4 : 16),
+                              ),
+                              border: isUser ? null : Border.all(color: kBorder),
+                            ),
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              if (msg['video_filename'] != null && (msg['video_filename'] as String).isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(children: [
+                                    const Icon(Icons.videocam, size: 13, color: Colors.white70),
+                                    const SizedBox(width: 4),
+                                    Flexible(child: Text(msg['video_filename'] as String, style: const TextStyle(fontSize: 11, color: Colors.white70))),
+                                  ]),
+                                ),
+                              isUser
+                                  ? SelectableText(msg['content'] as String, style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.5))
+                                  : SelectionArea(child: MarkdownBody(
+                                      data: msg['content'] as String,
+                                      styleSheet: MarkdownStyleSheet(
+                                        p: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.85), height: 1.5),
+                                        strong: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),
+                                        listBullet: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.85)),
+                                        tableHead: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                        tableBody: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13),
+                                        tableBorder: TableBorder.all(color: Colors.white12),
+                                        tableColumnWidth: const FlexColumnWidth(),
+                                      ),
+                                    )),
+                            ]),
+                          ),
+                        ),
+                        if (isUser) const SizedBox(width: 10),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ),
 
-        // Zone saisie
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: const Color(0xFF1A1A2E), border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
-          child: Column(children: [
-            if (pendingVideoName != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(color: const Color(0xFF6C63FF).withOpacity(0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.3))),
-                child: Row(children: [
-                  const Icon(Icons.videocam, size: 16, color: Color(0xFF6C63FF)),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(pendingVideoName!, style: const TextStyle(fontSize: 12, color: Colors.white70))),
-                  GestureDetector(onTap: () => setState(() { pendingVideoBytes = null; pendingVideoName = null; }), child: const Icon(Icons.close, size: 16, color: Colors.white38)),
-                ]),
-              ),
-            Row(children: [
-              IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_outlined, color: Color(0xFF6C63FF)), tooltip: "Envoyer une vidéo"),
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                  maxLines: 5,
-                  minLines: 1,
-                  keyboardType: TextInputType.text,
-                  decoration: InputDecoration(
-                    hintText: "Pose une question à ton coach...",
-                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 14),
-                    filled: true,
-                    fillColor: const Color(0xFF0F0F1A),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  ),
-                  onSubmitted: (_) => sendMessage(),
+      // Zone saisie
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(color: kSidebar, border: Border(top: BorderSide(color: kBorder))),
+        child: Column(children: [
+          if (pendingVideoName != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(color: kOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: kOrange.withOpacity(0.3))),
+              child: Row(children: [
+                const Icon(Icons.videocam, size: 15, color: kOrange),
+                const SizedBox(width: 8),
+                Expanded(child: Text(pendingVideoName!, style: const TextStyle(fontSize: 12, color: Colors.white70))),
+                GestureDetector(onTap: () => setState(() { pendingVideoBytes = null; pendingVideoName = null; }), child: Icon(Icons.close, size: 15, color: Colors.white.withOpacity(0.3))),
+              ]),
+            ),
+          Row(children: [
+            IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_outlined, color: kOrange, size: 22), tooltip: "Envoyer une vidéo"),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                maxLines: 5,
+                minLines: 1,
+                keyboardType: TextInputType.text,
+                decoration: InputDecoration(
+                  hintText: "Pose une question à ton coach...",
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.25), fontSize: 14),
+                  filled: true,
+                  fillColor: kBg,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kBorder)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kBorder)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
+                onSubmitted: (_) => sendMessage(),
               ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: isLoading ? null : sendMessage,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: isLoading ? const Color(0xFF6C63FF).withOpacity(0.3) : const Color(0xFF6C63FF), shape: BoxShape.circle),
-                  child: const Icon(Icons.send, color: Colors.white, size: 18),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: isLoading ? null : sendMessage,
+              child: Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: isLoading ? kOrange.withOpacity(0.3) : kOrange,
+                  borderRadius: BorderRadius.circular(10),
                 ),
+                child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
               ),
-            ]),
+            ),
           ]),
-        ),
-      ]),
-    );
+        ]),
+      ),
+    ]);
   }
 }
