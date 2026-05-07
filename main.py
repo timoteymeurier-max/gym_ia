@@ -61,11 +61,22 @@ def analyze_video(video_path):
             "analysis": "Aucune pose detectee dans la video.",
             "knee_min": None,
             "hip_avg": None,
+            "reps": 0,
             "feedback": []
         }
 
     min_knee = round(float(np.min(angles_knee)), 1)
     avg_hip = round(float(np.mean(angles_hip)), 1)
+
+    # Comptage des répétitions
+    reps = 0
+    state = "up"  # état initial : debout
+    for angle in angles_knee:
+        if state == "up" and angle < 90:
+            state = "down"
+        elif state == "down" and angle > 150:
+            state = "up"
+            reps += 1
 
     feedback = []
     if min_knee > 90:
@@ -84,6 +95,7 @@ def analyze_video(video_path):
         "analysis": analysis,
         "knee_min": min_knee,
         "hip_avg": avg_hip,
+        "reps": reps,
         "feedback": feedback
     }
 

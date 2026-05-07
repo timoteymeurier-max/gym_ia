@@ -76,8 +76,11 @@ class _HomePageState extends State<HomePage> {
       var body = await response.stream.bytesToString();
       final json = jsonDecode(body);
       String msg = json['analysis'] ?? "Aucun résultat";
+      if (json['reps'] != null) {
+        msg += "\n\nRepetitions detectees : ${json['reps']}";
+      }
       if (json['knee_min'] != null) {
-        msg += "\n\nAngle genou minimum : ${json['knee_min']}°";
+        msg += "\nAngle genou minimum : ${json['knee_min']}°";
       }
       if (json['hip_avg'] != null) {
         msg += "\nAngle hanche moyen : ${json['hip_avg']}°";
