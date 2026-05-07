@@ -15,6 +15,19 @@ const kSidebar = Color(0xFF141414);
 const kCard = Color(0xFF1C1C1C);
 const kBorder = Color(0xFF2A2A2A);
 
+class Clickable extends StatelessWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  const Clickable({super.key, required this.child, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(onTap: onTap, child: child),
+    );
+  }
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
@@ -86,24 +99,23 @@ class _MainPageState extends State<MainPage> {
     return Scaffold(
       backgroundColor: kBg,
       body: Row(children: [
-        // Sidebar
         AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           width: sidebarOpen ? 260 : 0,
           child: sidebarOpen ? _buildSidebar() : const SizedBox(),
         ),
-
-        // Zone principale
         Expanded(
           child: Column(children: [
-            // Topbar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(color: kSidebar, border: Border(bottom: BorderSide(color: kBorder))),
               child: Row(children: [
-                IconButton(
-                  onPressed: () => setState(() => sidebarOpen = !sidebarOpen),
-                  icon: Icon(Icons.menu, color: Colors.white.withOpacity(0.5)),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: IconButton(
+                    onPressed: () => setState(() => sidebarOpen = !sidebarOpen),
+                    icon: Icon(Icons.menu, color: Colors.white.withOpacity(0.5)),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Container(
@@ -114,15 +126,16 @@ class _MainPageState extends State<MainPage> {
                 const SizedBox(width: 10),
                 const Text("Gym AI Coach", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
                 const Spacer(),
-                IconButton(
-                  onPressed: createNewConversation,
-                  icon: const Icon(Icons.edit_outlined, color: kOrange, size: 20),
-                  tooltip: "Nouveau chat",
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: IconButton(
+                    onPressed: createNewConversation,
+                    icon: const Icon(Icons.edit_outlined, color: kOrange, size: 20),
+                    tooltip: "Nouveau chat",
+                  ),
                 ),
               ]),
             ),
-
-            // Chat
             Expanded(
               child: activeConvId == null
                   ? _buildWelcome()
@@ -150,7 +163,6 @@ class _MainPageState extends State<MainPage> {
         border: Border(right: BorderSide(color: kBorder)),
       ),
       child: Column(children: [
-        // Header
         Padding(
           padding: const EdgeInsets.all(12),
           child: SizedBox(
@@ -169,12 +181,13 @@ class _MainPageState extends State<MainPage> {
             ),
           ),
         ),
-
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Align(alignment: Alignment.centerLeft, child: Text("RÉCENT", style: TextStyle(fontSize: 10, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2))),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text("RÉCENT", style: TextStyle(fontSize: 10, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          ),
         ),
-
         Expanded(
           child: conversations.isEmpty
               ? Center(child: Text("Aucune conversation", style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 12)))
@@ -184,7 +197,7 @@ class _MainPageState extends State<MainPage> {
                   itemBuilder: (context, index) {
                     final conv = conversations[index];
                     final isActive = conv['id'] == activeConvId;
-                    return GestureDetector(
+                    return Clickable(
                       onTap: () => setState(() => activeConvId = conv['id']),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 2),
@@ -206,7 +219,7 @@ class _MainPageState extends State<MainPage> {
                             const SizedBox(height: 2),
                             Text(conv['updated_at'] ?? '', style: const TextStyle(fontSize: 10, color: Colors.white24)),
                           ])),
-                          GestureDetector(
+                          Clickable(
                             onTap: () => deleteConversation(conv['id']),
                             child: Padding(
                               padding: const EdgeInsets.only(left: 4),
@@ -224,33 +237,48 @@ class _MainPageState extends State<MainPage> {
   }
 
   Widget _buildWelcome() {
+    final suggestions = [
+      {"icon": Icons.videocam_outlined, "text": "Analyse mon squat"},
+      {"icon": Icons.fitness_center, "text": "Donne-moi un programme pour gagner en force"},
+      {"icon": Icons.compare_arrows, "text": "Comment améliorer ma profondeur de squat ?"},
+      {"icon": Icons.monitor_heart_outlined, "text": "Comment savoir si je peux augmenter la charge ?"},
+      {"icon": Icons.emoji_objects_outlined, "text": "Quels muscles travaille le squat ?"},
+      {"icon": Icons.schedule, "text": "Combien de fois par semaine faire des squats ?"},
+    ];
+
     return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: kOrange.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: kOrange.withOpacity(0.3))),
-          child: const Icon(Icons.fitness_center, size: 48, color: kOrange),
-        ),
-        const SizedBox(height: 24),
-        const Text("Gym AI Coach", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
-        const SizedBox(height: 8),
-        Text("Ton coach sportif IA personnel", style: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.35))),
-        const SizedBox(height: 8),
-        Text("Pose une question ou envoie une vidéo de squat", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.2))),
-        const SizedBox(height: 32),
-        ElevatedButton.icon(
-          onPressed: createNewConversation,
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text("Démarrer une conversation", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: kOrange,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            elevation: 0,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: kOrange.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: kOrange.withOpacity(0.3))),
+            child: const Icon(Icons.fitness_center, size: 44, color: kOrange),
           ),
-        ),
-      ]),
+          const SizedBox(height: 20),
+          const Text("Gym AI Coach", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
+          const SizedBox(height: 6),
+          Text("Ton coach sportif IA personnel", style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.35))),
+          const SizedBox(height: 32),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            alignment: WrapAlignment.center,
+            children: suggestions.map((s) => Clickable(
+              onTap: () => createNewConversation(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(s['icon'] as IconData, size: 15, color: kOrange),
+                  const SizedBox(width: 8),
+                  Text(s['text'] as String, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.7))),
+                ]),
+              ),
+            )).toList(),
+          ),
+        ]),
+      ),
     );
   }
 }
@@ -291,7 +319,10 @@ class _ChatViewState extends State<ChatView> {
   Future<void> pickVideo() async {
     FilePickerResult? picked = await FilePicker.platform.pickFiles(type: FileType.video, withData: true);
     if (picked != null) {
-      setState(() { pendingVideoBytes = picked.files.single.bytes; pendingVideoName = picked.files.single.name; });
+      setState(() {
+        pendingVideoBytes = picked.files.single.bytes;
+        pendingVideoName = picked.files.single.name;
+      });
     }
   }
 
@@ -459,11 +490,17 @@ class _ChatViewState extends State<ChatView> {
                 const Icon(Icons.videocam, size: 15, color: kOrange),
                 const SizedBox(width: 8),
                 Expanded(child: Text(pendingVideoName!, style: const TextStyle(fontSize: 12, color: Colors.white70))),
-                GestureDetector(onTap: () => setState(() { pendingVideoBytes = null; pendingVideoName = null; }), child: Icon(Icons.close, size: 15, color: Colors.white.withOpacity(0.3))),
+                Clickable(
+                  onTap: () => setState(() { pendingVideoBytes = null; pendingVideoName = null; }),
+                  child: Icon(Icons.close, size: 15, color: Colors.white.withOpacity(0.3)),
+                ),
               ]),
             ),
           Row(children: [
-            IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_outlined, color: kOrange, size: 22), tooltip: "Envoyer une vidéo"),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_outlined, color: kOrange, size: 22), tooltip: "Envoyer une vidéo"),
+            ),
             Expanded(
               child: TextField(
                 controller: _controller,
@@ -485,8 +522,8 @@ class _ChatViewState extends State<ChatView> {
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: isLoading ? null : sendMessage,
+            Clickable(
+              onTap: () => sendMessage(),
               child: Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
