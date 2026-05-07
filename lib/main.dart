@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:typed_data';
 
 void main() {
   runApp(const MyApp());
@@ -7,7 +9,6 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
@@ -19,31 +20,57 @@ class MyApp extends StatelessWidget {
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  String videoName = "Aucune vidéo sélectionnée";
+  String videoName = "Aucune video selectionnee";
+  String result = "";
+  bool isLoading = false;
+  Uint8List? videoBytes;
 
   Future<void> pickVideo() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
+    FilePickerResult? picked = await FilePicker.platform.pickFiles(
       type: FileType.video,
+      withData: true,
     );
-
-    if (result != null) {
+    if (picked != null) {
       setState(() {
-        videoName = result.files.single.name;
+        videoName = picked.files.single.name;
+        videoBytes = picked.files.single.bytes;
+        result = "";
       });
+    }
+  }
 
-      print("Vidéo sélectionnée : ${result.files.single.name}");
-    } else {
+  Future<void> uploadVideo() async {
+    if (videoBytes == null) return;
+    setState(() {
+      isLoading = true;
+      result = "";
+    });
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://127.0.0.1:8000/upload/'),
+      );
+      request.files.add(http.MultipartFile.fromBytes(
+        'file',
+        videoBytes!,
+        filename: videoName,
+      ));
+      var response = await request.send();
+      var body = await response.stream.bytesToString();
       setState(() {
-        videoName = "Aucune vidéo sélectionnée";
+        result = body;
+        isLoading = false;
       });
-
-      print("Aucune vidéo sélectionnée");
+    } catch (e) {
+      setState(() {
+        result = "Erreur : $e";
+        isLoading = false;
+      });
     }
   }
 
@@ -62,21 +89,34 @@ class _HomePageState extends State<HomePage> {
               "Analyse ton mouvement",
               style: TextStyle(fontSize: 20),
             ),
-
             const SizedBox(height: 20),
-
             ElevatedButton(
               onPressed: pickVideo,
-              child: const Text("Importer une vidéo"),
+              child: const Text("Importer une video"),
             ),
-
-            const SizedBox(height: 20),
-
+            const SizedBox(height: 10),
             Text(
               videoName,
               style: const TextStyle(fontSize: 16, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: videoBytes == null ? null : uploadVideo,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+              ),
+              child: const Text("Analyser"),
+            ),
+            const SizedBox(height: 20),
+            if (isLoading)
+              const CircularProgressIndicator(),
+            if (result.isNotEmpty)
+              Text(
+                result,
+                style: const TextStyle(fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
           ],
         ),
       ),
