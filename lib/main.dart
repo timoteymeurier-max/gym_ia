@@ -5,16 +5,19 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
 import 'dart:convert';
+import 'dart:math';
 
 void main() {
   runApp(const MyApp());
 }
 
 const kOrange = Color(0xFFFF6B2B);
-const kBg = Color(0xFF0D0D0D);
-const kSidebar = Color(0xFF141414);
-const kCard = Color(0xFF1C1C1C);
+const kBg = Color(0xFF0A0A0A);
+const kCard = Color(0xFF151515);
+const kCard2 = Color(0xFF1E1E1E);
 const kBorder = Color(0xFF2A2A2A);
+const kText = Colors.white;
+const kTextDim = Color(0xFF888888);
 const String kBaseUrl = 'http://127.0.0.1:8000';
 
 class Clickable extends StatelessWidget {
@@ -36,11 +39,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: kOrange, brightness: Brightness.dark),
-        useMaterial3: true,
-        scaffoldBackgroundColor: kBg,
-      ),
+      theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: kBg, useMaterial3: true),
       home: const RootPage(),
     );
   }
@@ -74,33 +73,57 @@ class _RootPageState extends State<RootPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
+      extendBody: true,
       body: IndexedStack(
         index: _currentIndex,
         children: [
           HomePage(userData: userData, onUserDataChanged: loadUserData),
-          ProgramsPage(userData: userData),
           CoachPage(onMessageSent: loadUserData),
+          TrainingPage(userData: userData),
+          NutritionPage(userData: userData),
           ProgressPage(userData: userData),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(color: kSidebar, border: Border(top: BorderSide(color: kBorder))),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (i) => setState(() => _currentIndex = i),
-          backgroundColor: Colors.transparent,
-          selectedItemColor: kOrange,
-          unselectedItemColor: Colors.white24,
-          elevation: 0,
-          type: BottomNavigationBarType.fixed,
-          selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(fontSize: 11),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: "Accueil"),
-            BottomNavigationBarItem(icon: Icon(Icons.fitness_center_outlined), activeIcon: Icon(Icons.fitness_center), label: "Programmes"),
-            BottomNavigationBarItem(icon: Icon(Icons.psychology_outlined), activeIcon: Icon(Icons.psychology), label: "Coach IA"),
-            BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), activeIcon: Icon(Icons.bar_chart), label: "Progression"),
-          ],
+      bottomNavigationBar: _buildNavBar(),
+    );
+  }
+
+  Widget _buildNavBar() {
+    final items = [
+      {"icon": Icons.home_rounded, "label": "Accueil"},
+      {"icon": Icons.psychology_rounded, "label": "Coach IA"},
+      {"icon": Icons.fitness_center_rounded, "label": "Training"},
+      {"icon": Icons.restaurant_rounded, "label": "Nutrition"},
+      {"icon": Icons.bar_chart_rounded, "label": "Progrès"},
+    ];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: kBorder),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 8))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: items.asMap().entries.map((e) {
+            final isActive = _currentIndex == e.key;
+            return Clickable(
+              onTap: () => setState(() => _currentIndex = e.key),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(color: isActive ? kOrange.withOpacity(0.15) : Colors.transparent, borderRadius: BorderRadius.circular(18)),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(e.value['icon'] as IconData, color: isActive ? kOrange : kTextDim, size: 22),
+                  const SizedBox(height: 3),
+                  Text(e.value['label'] as String, style: TextStyle(fontSize: 10, color: isActive ? kOrange : kTextDim, fontWeight: isActive ? FontWeight.w600 : FontWeight.normal)),
+                ]),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );
@@ -109,307 +132,421 @@ class _RootPageState extends State<RootPage> {
 
 // ===================== PAGE ACCUEIL =====================
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   final Map<String, String> userData;
   final VoidCallback onUserDataChanged;
   const HomePage({super.key, required this.userData, required this.onUserDataChanged});
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
 
-  Widget _statCard(String label, String value, String unit, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Icon(icon, size: 14, color: color)),
-        const SizedBox(height: 12),
-        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-        const SizedBox(height: 2),
-        Text("$label $unit", style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.35))),
-      ]),
-    );
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+  late AnimationController _heroController;
+  late Animation<double> _heroOpacity;
+  late Animation<double> _heroScale;
+  late AnimationController _contentController;
+  late Animation<double> _contentOpacity;
+  late Animation<Offset> _contentSlide;
+  bool _heroComplete = false;
+  final TextEditingController _chatController = TextEditingController();
+  late String _currentMessage;
+
+  List<String> _getPersonalizedMessages() {
+    final name = widget.userData['name'] ?? '';
+    final squat = widget.userData['squat_weight'];
+    final weight = widget.userData['weight'];
+    final streak = widget.userData['streak'];
+    final goal = widget.userData['goal'] ?? '';
+    final lastScore = widget.userData['last_squat_score'];
+    final messages = <String>[];
+    if (name.isNotEmpty) messages.add("Hey $name 👋 Prêt à tout donner aujourd'hui ?");
+    if (squat != null && squat != '--') messages.add("Ton squat à ${squat}kg c'est solide. On vise plus ?");
+    if (lastScore != null && lastScore != '--') messages.add("Score $lastScore/100 à la dernière séance. On fait encore mieux ?");
+    if (streak != null && streak != '--') messages.add("$streak jours de streak 🔥 Tu es en feu. Lâche rien.");
+    if (weight != null && weight != '--') messages.add("À ${weight}kg, chaque séance compte. Allons-y.");
+    if (goal.isNotEmpty) messages.add("Objectif : $goal. Tu y es presque 💪");
+    messages.addAll([
+      "Prêt à battre ton record aujourd'hui ? 🔥",
+      "Ton objectif est proche. Continue comme ça.",
+      "On repart sur un push day aujourd'hui ?",
+      "Chaque rep te rapproche de ton objectif.",
+      "Le plus dur c'est de commencer. T'es déjà là 🚀",
+      "Une séance de plus et la semaine est parfaite ✅",
+    ]);
+    return messages;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final messages = _getPersonalizedMessages();
+    _currentMessage = messages[Random().nextInt(messages.length)];
+
+    _heroController = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _heroOpacity = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _heroController, curve: const Interval(0.0, 0.6, curve: Curves.easeOut)));
+    _heroScale = Tween<double>(begin: 0.85, end: 1.0).animate(CurvedAnimation(parent: _heroController, curve: Curves.easeOutBack));
+
+    _contentController = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+    _contentOpacity = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _contentController, curve: Curves.easeOut));
+    _contentSlide = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(CurvedAnimation(parent: _contentController, curve: Curves.easeOut));
+
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _heroController.forward().then((_) {
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted) {
+            setState(() => _heroComplete = true);
+            _contentController.forward();
+          }
+        });
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _heroController.dispose();
+    _contentController.dispose();
+    _chatController.dispose();
+    super.dispose();
+  }
+
+  String _levelShort(String level) {
+    if (level == 'debutant') return 'Déb.';
+    if (level == 'intermediaire') return 'Inter.';
+    if (level == 'avance') return 'Avancé';
+    return level;
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = userData['name'] ?? 'Athlete';
-    final weight = userData['weight'] ?? '--';
-    final sessions = userData['sessions_per_week'] ?? '--';
-    final streak = userData['streak'] ?? '--';
-    final calories = userData['calories'] ?? '--';
-    final lastScore = userData['last_squat_score'] ?? '--';
-    final lastReps = userData['last_squat_reps'] ?? '--';
-    final lastDate = userData['last_squat_date'] ?? '';
-
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text("Bonjour 👋", style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.4))),
-              Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-            ]),
-            const Spacer(),
-            Clickable(
-              onTap: () async {
-                await showDialog(
-                  context: context,
-                  builder: (context) => Dialog(
-                    backgroundColor: kBg,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: SizedBox(width: 500, height: 600, child: ProfilePage(userData: userData)),
-                  ),
-                );
-                onUserDataChanged();
-              },
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
-                child: const Icon(Icons.person_outline, color: Colors.white54, size: 20),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 24),
-
-          // Bannière IA
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [kOrange.withOpacity(0.8), kOrange.withOpacity(0.4)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Row(children: [
-                Icon(Icons.auto_awesome, color: Colors.white, size: 16),
-                SizedBox(width: 6),
-                Text("Coach IA", style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-              ]),
-              const SizedBox(height: 8),
-              Text("Prêt pour ta prochaine séance, $name ?", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              if (lastDate.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text("Dernière analyse : Score $lastScore/100 · $lastReps reps · $lastDate", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
-              ],
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: kOrange, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
-                child: const Text("Parler au coach", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-              ),
-            ]),
+      bottom: false,
+      child: Stack(children: [
+        if (!_heroComplete) _buildHeroScreen(),
+        if (_heroComplete)
+          FadeTransition(
+            opacity: _contentOpacity,
+            child: SlideTransition(position: _contentSlide, child: _buildMainContent()),
           ),
-          const SizedBox(height: 24),
+      ]),
+    );
+  }
 
-          const Text("MON PROFIL", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.5,
-            children: [
-              _statCard("Poids", weight, "kg", Icons.monitor_weight_outlined, Colors.blue),
-              _statCard("Séances", sessions, "/ sem", Icons.bolt, kOrange),
-              _statCard("Streak", streak, "jours", Icons.local_fire_department, Colors.amber),
-              _statCard("Calories", calories, "kcal", Icons.local_fire_department, Colors.red),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Dernière analyse squat
-          if (lastScore != '--') ...[
-            const Text("DERNIÈRE ANALYSE SQUAT", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kOrange.withOpacity(0.3))),
-              child: Row(children: [
+  Widget _buildHeroScreen() {
+    return Container(
+      color: kBg,
+      child: Center(
+        child: FadeTransition(
+          opacity: _heroOpacity,
+          child: ScaleTransition(
+            scale: _heroScale,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Container(
-                  width: 56, height: 56,
-                  decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                  child: Center(child: Text("$lastScore", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kOrange))),
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(color: kOrange.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: kOrange.withOpacity(0.2))),
+                  child: const Icon(Icons.psychology_rounded, color: kOrange, size: 40),
                 ),
-                const SizedBox(width: 14),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text("Score squat", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-                  const SizedBox(height: 4),
-                  Text("$lastReps reps · $lastDate", style: const TextStyle(fontSize: 12, color: Colors.white38)),
-                ])),
-                const Text("/100", style: TextStyle(fontSize: 13, color: Colors.white38)),
+                const SizedBox(height: 32),
+                Text(_currentMessage, textAlign: TextAlign.center, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: kText, height: 1.3, letterSpacing: -0.5)),
+                const SizedBox(height: 16),
+                Text("Coach IA · Gym AI", style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.25), letterSpacing: 1)),
               ]),
             ),
-          ],
-        ]),
-      ),
-    );
-  }
-}
-
-// ===================== PAGE PROGRAMMES =====================
-
-class ProgramsPage extends StatelessWidget {
-  final Map<String, String> userData;
-  const ProgramsPage({super.key, required this.userData});
-
-  final List<Map<String, dynamic>> programs = const [
-    {"title": "Prise de masse", "desc": "Gagner du muscle efficacement", "icon": Icons.trending_up, "color": Color(0xFFFF6B2B), "sessions": "4x/semaine"},
-    {"title": "Sèche", "desc": "Perdre du gras en gardant le muscle", "icon": Icons.local_fire_department, "color": Color(0xFFFF4444), "sessions": "5x/semaine"},
-    {"title": "Force", "desc": "Augmenter tes charges maximales", "icon": Icons.bolt, "color": Color(0xFF4CAF50), "sessions": "3x/semaine"},
-    {"title": "Endurance", "desc": "Améliorer ton cardio et ta résistance", "icon": Icons.directions_run, "color": Color(0xFF2196F3), "sessions": "4x/semaine"},
-    {"title": "Débutant", "desc": "Commencer le sport progressivement", "icon": Icons.star_outline, "color": Color(0xFFFFBB33), "sessions": "3x/semaine"},
-    {"title": "Maison", "desc": "S'entraîner sans équipement", "icon": Icons.home, "color": Color(0xFF9C27B0), "sessions": "4x/semaine"},
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final squat = userData['squat_weight'] ?? '--';
-    final bench = userData['bench_weight'] ?? '--';
-    final deadlift = userData['deadlift_weight'] ?? '--';
-
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("Programmes", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-          const SizedBox(height: 4),
-          Text("Choisis ton programme d'entraînement", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
-
-          // Mes charges
-          if (squat != '--' || bench != '--' || deadlift != '--') ...[
-            const SizedBox(height: 24),
-            const Text("MES CHARGES", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-            const SizedBox(height: 12),
-            Row(children: [
-              if (squat != '--') Expanded(child: _chargeCard("Squat", squat, kOrange)),
-              if (squat != '--') const SizedBox(width: 10),
-              if (bench != '--') Expanded(child: _chargeCard("Développé couché", bench, const Color(0xFF4CAF50))),
-              if (bench != '--') const SizedBox(width: 10),
-              if (deadlift != '--') Expanded(child: _chargeCard("Soulevé de terre", deadlift, const Color(0xFF2196F3))),
-            ]),
-          ],
-
-          const SizedBox(height: 24),
-          const Text("OBJECTIFS", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-          const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.3),
-            itemCount: programs.length,
-            itemBuilder: (context, index) {
-              final p = programs[index];
-              return Clickable(
-                onTap: () => showDialog(context: context, builder: (context) => ProgramDetailDialog(program: p)),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: (p['color'] as Color).withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: Icon(p['icon'] as IconData, color: p['color'] as Color, size: 20)),
-                    const Spacer(),
-                    Text(p['title'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
-                    const SizedBox(height: 2),
-                    Text(p['sessions'] as String, style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.35))),
-                  ]),
-                ),
-              );
-            },
           ),
-          const SizedBox(height: 24),
-          const Text("NUTRITION", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-          const SizedBox(height: 12),
-          ...[
-            {"title": "Bowl protéiné", "kcal": "520 kcal", "protein": "42g protéines", "time": "15 min", "color": Color(0xFF4CAF50)},
-            {"title": "Shake masse", "kcal": "680 kcal", "protein": "55g protéines", "time": "5 min", "color": Color(0xFF2196F3)},
-            {"title": "Omelette sportive", "kcal": "380 kcal", "protein": "35g protéines", "time": "10 min", "color": kOrange},
-          ].map((meal) => Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
-            child: Row(children: [
-              Container(width: 4, height: 40, decoration: BoxDecoration(color: meal['color'] as Color, borderRadius: BorderRadius.circular(2))),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(meal['title'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-                const SizedBox(height: 2),
-                Text("${meal['kcal']} · ${meal['protein']}", style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.35))),
-              ])),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: (meal['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: Text(meal['time'] as String, style: TextStyle(fontSize: 11, color: meal['color'] as Color, fontWeight: FontWeight.w600)),
-              ),
-            ]),
-          )).toList(),
-        ]),
-      ),
-    );
-  }
-
-  Widget _chargeCard(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3))),
-      child: Column(children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.white.withOpacity(0.4), fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        Text("$value kg", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-      ]),
-    );
-  }
-}
-
-class ProgramDetailDialog extends StatelessWidget {
-  final Map<String, dynamic> program;
-  const ProgramDetailDialog({super.key, required this.program});
-
-  @override
-  Widget build(BuildContext context) {
-    final exercises = ["Squat", "Presse à cuisses", "Fentes", "Leg curl", "Mollets debout"];
-    return Dialog(
-      backgroundColor: kBg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SizedBox(
-        width: 500,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: (program['color'] as Color).withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(program['icon'] as IconData, color: program['color'] as Color, size: 24)),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(program['title'] as String, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                Text(program['desc'] as String, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.4))),
-              ])),
-              Clickable(onTap: () => Navigator.pop(context), child: const Icon(Icons.close, color: Colors.white38, size: 20)),
-            ]),
-            const SizedBox(height: 20),
-            const Text("PLANNING SEMAINE", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1)),
-            const SizedBox(height: 10),
-            Row(children: ["L", "M", "M", "J", "V", "S", "D"].asMap().entries.map((e) {
-              final active = [0, 2, 4].contains(e.key);
-              return Expanded(child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(color: active ? kOrange : kCard, borderRadius: BorderRadius.circular(8), border: Border.all(color: active ? kOrange : kBorder)),
-                child: Text(e.value, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? Colors.white : Colors.white24)),
-              ));
-            }).toList()),
-            const SizedBox(height: 20),
-            const Text("EXERCICES", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1)),
-            const SizedBox(height: 10),
-            ...exercises.asMap().entries.map((e) => Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
-              child: Row(children: [
-                Container(width: 28, height: 28, decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Center(child: Text("${e.key + 1}", style: const TextStyle(fontSize: 12, color: kOrange, fontWeight: FontWeight.bold)))),
-                const SizedBox(width: 12),
-                Expanded(child: Text(e.value, style: const TextStyle(fontSize: 14, color: Colors.white))),
-                Text("4×8", style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.35))),
-              ]),
-            )).toList(),
-          ]),
         ),
       ),
     );
   }
+
+  Widget _buildMainContent() {
+    final name = widget.userData['name'] ?? '';
+    final weight = widget.userData['weight'] ?? '--';
+    final sessions = widget.userData['sessions_per_week'] ?? '--';
+    final squat = widget.userData['squat_weight'] ?? '--';
+    final streak = widget.userData['streak'] ?? '--';
+    final lastScore = widget.userData['last_squat_score'] ?? '--';
+    final lastReps = widget.userData['last_squat_reps'] ?? '--';
+    final lastDate = widget.userData['last_squat_date'] ?? '';
+    final age = widget.userData['age'] ?? '';
+    final height = widget.userData['height'] ?? '';
+    final goal = widget.userData['goal'] ?? '';
+    final level = widget.userData['level'] ?? '';
+
+    List<Map<String, dynamic>> weightHistory = [];
+    try {
+      final raw = widget.userData['weight_history'] ?? '[]';
+      weightHistory = (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+    } catch (e) {}
+
+    return Column(children: [
+      // HEADER
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        child: Row(children: [
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              name.isNotEmpty ? "Hey $name 👋" : "Hey 👋",
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kText),
+            ),
+            if (goal.isNotEmpty)
+              Text(goal, style: const TextStyle(fontSize: 13, color: kTextDim)),
+          ]),
+          const Spacer(),
+          Clickable(
+            onTap: () async {
+              await showDialog(
+                context: context,
+                builder: (context) => Dialog(
+                  backgroundColor: kBg,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  child: SizedBox(width: 500, height: 600, child: ProfilePage(userData: widget.userData)),
+                ),
+              );
+              widget.onUserDataChanged();
+            },
+            child: Container(width: 38, height: 38, decoration: BoxDecoration(color: kCard2, shape: BoxShape.circle, border: Border.all(color: kBorder)), child: const Icon(Icons.person_rounded, color: kTextDim, size: 18)),
+          ),
+        ]),
+      ),
+
+      Expanded(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 100),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+            // MESSAGE IA CENTRAL
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(24), border: Border.all(color: kOrange.withOpacity(0.15))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.psychology_rounded, color: kOrange, size: 16)),
+                  const SizedBox(width: 8),
+                  const Text("Coach IA", style: TextStyle(fontSize: 12, color: kOrange, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                ]),
+                const SizedBox(height: 16),
+                Text(_currentMessage, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kText, height: 1.35, letterSpacing: -0.3)),
+                const SizedBox(height: 20),
+                Container(
+                  decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+                  child: Row(children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _chatController,
+                        style: const TextStyle(color: kText, fontSize: 14),
+                        maxLines: 1,
+                        decoration: InputDecoration(
+                          hintText: "Pose une question...",
+                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        ),
+                        onSubmitted: (val) { if (val.trim().isNotEmpty) _chatController.clear(); },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Clickable(
+                        onTap: () => _chatController.clear(),
+                        child: Container(padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 16)),
+                      ),
+                    ),
+                  ]),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 20),
+
+            // MON PROFIL
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text("MON PROFIL", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                const SizedBox(height: 14),
+                Row(children: [
+                  _compactStat("Poids", "$weight kg", Icons.monitor_weight_outlined, Colors.blue),
+                  Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                  _compactStat("Taille", height.isNotEmpty ? "${height}cm" : '--', Icons.height_rounded, const Color(0xFF4CAF50)),
+                  Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                  _compactStat("Âge", age.isNotEmpty ? "${age} ans" : '--', Icons.cake_rounded, Colors.purple),
+                  Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                  _compactStat("Niveau", level.isNotEmpty ? _levelShort(level) : '--', Icons.star_rounded, Colors.amber),
+                ]),
+
+                if (weightHistory.length >= 2) ...[
+                  const SizedBox(height: 20),
+                  const Text("ÉVOLUTION DU POIDS", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 80,
+                    width: double.infinity,
+                    child: CustomPaint(painter: WeightChartPainter(weightHistory)),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text(weightHistory.first['date'] ?? '', style: const TextStyle(fontSize: 10, color: kTextDim)),
+                    Text(weightHistory.last['date'] ?? '', style: const TextStyle(fontSize: 10, color: kTextDim)),
+                  ]),
+                ],
+              ]),
+            ),
+            const SizedBox(height: 20),
+
+            // MES PERFS
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text("MES PERFS", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                const SizedBox(height: 14),
+                Row(children: [
+                  _compactStat("Séances", sessions, Icons.bolt_rounded, kOrange),
+                  Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                  _compactStat("Squat", "$squat kg", Icons.fitness_center_rounded, const Color(0xFF4CAF50)),
+                  Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                  _compactStat("Streak", "$streak j 🔥", Icons.local_fire_department_rounded, Colors.amber),
+                ]),
+              ]),
+            ),
+            const SizedBox(height: 20),
+
+            // SEMAINE
+            _buildWeekWidget(),
+            const SizedBox(height: 20),
+
+            // DERNIÈRE ANALYSE
+            if (lastScore != '--') _buildLastAnalysis(lastScore, lastReps, lastDate),
+          ]),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _compactStat(String label, String value, IconData icon, Color color) {
+    return Expanded(child: Column(children: [
+      Icon(icon, color: color, size: 18),
+      const SizedBox(height: 6),
+      Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: kText), overflow: TextOverflow.ellipsis),
+      const SizedBox(height: 2),
+      Text(label, style: const TextStyle(fontSize: 10, color: kTextDim)),
+    ]));
+  }
+
+  Widget _buildWeekWidget() {
+    final days = ["L", "M", "M", "J", "V", "S", "D"];
+    final done = [true, true, false, true, false, false, false];
+    final today = DateTime.now().weekday - 1;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text("Cette semaine", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: days.asMap().entries.map((e) {
+            final isToday = e.key == today;
+            final isDone = done[e.key];
+            return Column(children: [
+              Text(e.value, style: TextStyle(fontSize: 11, color: isToday ? kOrange : kTextDim, fontWeight: isToday ? FontWeight.w700 : FontWeight.normal)),
+              const SizedBox(height: 6),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: 30, height: 30,
+                decoration: BoxDecoration(
+                  color: isDone ? kOrange : isToday ? kOrange.withOpacity(0.1) : kCard2,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: isToday ? kOrange : kBorder, width: isToday ? 1.5 : 1),
+                ),
+                child: isDone ? const Icon(Icons.check_rounded, color: Colors.white, size: 14) : null,
+              ),
+            ]);
+          }).toList(),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildLastAnalysis(String score, String reps, String date) {
+    final scoreInt = int.tryParse(score) ?? 0;
+    final color = scoreInt >= 80 ? const Color(0xFF4CAF50) : scoreInt >= 60 ? kOrange : Colors.red;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.2))),
+      child: Row(children: [
+        Container(width: 50, height: 50, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Center(child: Text(score, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: color)))),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text("Dernière analyse squat", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+          const SizedBox(height: 2),
+          Text("$reps reps · $date", style: const TextStyle(fontSize: 12, color: kTextDim)),
+        ])),
+        const Text("/100", style: TextStyle(fontSize: 12, color: kTextDim)),
+      ]),
+    );
+  }
+}
+
+// ===================== COURBE POIDS =====================
+
+class WeightChartPainter extends CustomPainter {
+  final List<Map<String, dynamic>> data;
+  WeightChartPainter(this.data);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.length < 2) return;
+    final weights = data.map((e) => (e['weight'] as num).toDouble()).toList();
+    final minW = weights.reduce((a, b) => a < b ? a : b) - 1;
+    final maxW = weights.reduce((a, b) => a > b ? a : b) + 1;
+    final range = maxW - minW == 0 ? 1.0 : maxW - minW;
+
+    final paint = Paint()..color = kOrange..strokeWidth = 2.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [kOrange.withOpacity(0.25), kOrange.withOpacity(0.0)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    final fillPath = Path();
+
+    for (int i = 0; i < data.length; i++) {
+      final x = i / (data.length - 1) * size.width;
+      final y = size.height - ((weights[i] - minW) / range * size.height);
+      if (i == 0) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        final prevX = (i - 1) / (data.length - 1) * size.width;
+        final prevY = size.height - ((weights[i - 1] - minW) / range * size.height);
+        final cpX = (prevX + x) / 2;
+        path.cubicTo(cpX, prevY, cpX, y, x, y);
+        fillPath.cubicTo(cpX, prevY, cpX, y, x, y);
+      }
+    }
+    fillPath.lineTo(size.width, size.height);
+    fillPath.close();
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(path, paint);
+
+    final dotPaint = Paint()..color = kOrange..style = PaintingStyle.fill;
+    for (int i = 0; i < data.length; i++) {
+      final x = i / (data.length - 1) * size.width;
+      final y = size.height - ((weights[i] - minW) / range * size.height);
+      canvas.drawCircle(Offset(x, y), 3.5, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 // ===================== PAGE COACH IA =====================
@@ -468,6 +605,7 @@ class _CoachPageState extends State<CoachPage> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
+      bottom: false,
       child: Row(children: [
         AnimatedContainer(
           duration: const Duration(milliseconds: 250),
@@ -478,13 +616,13 @@ class _CoachPageState extends State<CoachPage> {
           child: Column(children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(color: kSidebar, border: Border(bottom: BorderSide(color: kBorder))),
+              decoration: BoxDecoration(color: const Color(0xFF111111), border: Border(bottom: BorderSide(color: kBorder))),
               child: Row(children: [
-                MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: () => setState(() => sidebarOpen = !sidebarOpen), icon: Icon(Icons.menu, color: Colors.white.withOpacity(0.4), size: 20))),
+                MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: () => setState(() => sidebarOpen = !sidebarOpen), icon: Icon(Icons.menu_rounded, color: Colors.white.withOpacity(0.4), size: 20))),
                 const SizedBox(width: 6),
-                const Icon(Icons.psychology, color: kOrange, size: 18),
+                const Icon(Icons.psychology_rounded, color: kOrange, size: 18),
                 const SizedBox(width: 8),
-                const Text("Coach IA", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                const Text("Coach IA", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
                 const Spacer(),
                 MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: createNewConversation, icon: const Icon(Icons.edit_outlined, color: kOrange, size: 18), tooltip: "Nouveau chat")),
               ]),
@@ -510,7 +648,7 @@ class _CoachPageState extends State<CoachPage> {
 
   Widget _buildSidebar() {
     return Container(
-      decoration: const BoxDecoration(color: kSidebar, border: Border(right: BorderSide(color: kBorder))),
+      decoration: BoxDecoration(color: const Color(0xFF111111), border: Border(right: BorderSide(color: kBorder))),
       child: Column(children: [
         Padding(
           padding: const EdgeInsets.all(12),
@@ -518,15 +656,15 @@ class _CoachPageState extends State<CoachPage> {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: createNewConversation,
-              icon: const Icon(Icons.add, size: 15),
+              icon: const Icon(Icons.add_rounded, size: 15),
               label: const Text("Nouveau chat", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 11), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
+              style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 11), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
             ),
           ),
         ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Align(alignment: Alignment.centerLeft, child: Text("RÉCENT", style: TextStyle(fontSize: 10, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2))),
+          child: Align(alignment: Alignment.centerLeft, child: Text("RÉCENT", style: TextStyle(fontSize: 10, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2))),
         ),
         Expanded(
           child: conversations.isEmpty
@@ -542,15 +680,15 @@ class _CoachPageState extends State<CoachPage> {
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 2),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                        decoration: BoxDecoration(color: isActive ? kOrange.withOpacity(0.1) : Colors.transparent, borderRadius: BorderRadius.circular(8), border: Border.all(color: isActive ? kOrange.withOpacity(0.3) : Colors.transparent)),
+                        decoration: BoxDecoration(color: isActive ? kOrange.withOpacity(0.1) : Colors.transparent, borderRadius: BorderRadius.circular(10), border: Border.all(color: isActive ? kOrange.withOpacity(0.3) : Colors.transparent)),
                         child: Row(children: [
-                          Icon(Icons.chat_bubble_outline, size: 13, color: isActive ? kOrange : Colors.white38),
+                          Icon(Icons.chat_bubble_outline_rounded, size: 13, color: isActive ? kOrange : const Color(0xFF555555)),
                           const SizedBox(width: 8),
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(conv['title'] ?? 'Conversation', style: TextStyle(fontSize: 12, color: isActive ? Colors.white : Colors.white60, fontWeight: isActive ? FontWeight.w600 : FontWeight.normal), overflow: TextOverflow.ellipsis),
-                            Text(conv['updated_at'] ?? '', style: const TextStyle(fontSize: 10, color: Colors.white24)),
+                            Text(conv['title'] ?? 'Conversation', style: TextStyle(fontSize: 12, color: isActive ? Colors.white : const Color(0xFF888888), fontWeight: isActive ? FontWeight.w600 : FontWeight.normal), overflow: TextOverflow.ellipsis),
+                            Text(conv['updated_at'] ?? '', style: const TextStyle(fontSize: 10, color: Color(0xFF444444))),
                           ])),
-                          Clickable(onTap: () => deleteConversation(conv['id']), child: Padding(padding: const EdgeInsets.only(left: 4), child: Icon(Icons.close, size: 12, color: Colors.white.withOpacity(0.2)))),
+                          Clickable(onTap: () => deleteConversation(conv['id']), child: Padding(padding: const EdgeInsets.only(left: 4), child: Icon(Icons.close_rounded, size: 12, color: Colors.white.withOpacity(0.2)))),
                         ]),
                       ),
                     );
@@ -563,33 +701,33 @@ class _CoachPageState extends State<CoachPage> {
 
   Widget _buildWelcome() {
     final suggestions = [
-      {"icon": Icons.videocam_outlined, "text": "Analyse mon squat"},
-      {"icon": Icons.fitness_center, "text": "Programme pour gagner en force"},
-      {"icon": Icons.compare_arrows, "text": "Améliorer ma profondeur de squat"},
+      {"icon": Icons.videocam_rounded, "text": "Analyse mon squat"},
+      {"icon": Icons.fitness_center_rounded, "text": "Programme pour gagner en force"},
+      {"icon": Icons.compare_arrows_rounded, "text": "Améliorer ma profondeur"},
       {"icon": Icons.monitor_heart_outlined, "text": "Puis-je augmenter la charge ?"},
-      {"icon": Icons.emoji_objects_outlined, "text": "Quels muscles travaille le squat ?"},
-      {"icon": Icons.schedule, "text": "Combien de séances par semaine ?"},
+      {"icon": Icons.lightbulb_outline_rounded, "text": "Quels muscles travaille le squat ?"},
+      {"icon": Icons.schedule_rounded, "text": "Combien de séances par semaine ?"},
     ];
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: kOrange.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: kOrange.withOpacity(0.3))), child: const Icon(Icons.psychology, size: 40, color: kOrange)),
-          const SizedBox(height: 16),
-          const Text("Coach IA", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-          const SizedBox(height: 4),
+          Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: kOrange.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: kOrange.withOpacity(0.2))), child: const Icon(Icons.psychology_rounded, size: 40, color: kOrange)),
+          const SizedBox(height: 20),
+          const Text("Coach IA", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kText)),
+          const SizedBox(height: 6),
           Text("Ton coach sportif personnel", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3))),
-          const SizedBox(height: 28),
+          const SizedBox(height: 32),
           Wrap(
             spacing: 8, runSpacing: 8, alignment: WrapAlignment.center,
             children: suggestions.map((s) => Clickable(
               onTap: () => createNewConversation(),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Icon(s['icon'] as IconData, size: 14, color: kOrange),
-                  const SizedBox(width: 7),
+                  const SizedBox(width: 8),
                   Text(s['text'] as String, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.65))),
                 ]),
               ),
@@ -598,6 +736,229 @@ class _CoachPageState extends State<CoachPage> {
         ]),
       ),
     );
+  }
+}
+
+// ===================== PAGE TRAINING =====================
+
+class TrainingPage extends StatelessWidget {
+  final Map<String, String> userData;
+  const TrainingPage({super.key, required this.userData});
+
+  final List<Map<String, dynamic>> programs = const [
+    {"title": "Prise de masse", "desc": "Gagner du muscle efficacement", "icon": Icons.trending_up_rounded, "color": Color(0xFFFF6B2B), "sessions": "4x/semaine", "duration": "60 min"},
+    {"title": "Sèche", "desc": "Perdre du gras en gardant le muscle", "icon": Icons.local_fire_department_rounded, "color": Color(0xFFFF4444), "sessions": "5x/semaine", "duration": "45 min"},
+    {"title": "Force", "desc": "Augmenter tes charges maximales", "icon": Icons.bolt_rounded, "color": Color(0xFF4CAF50), "sessions": "3x/semaine", "duration": "75 min"},
+    {"title": "Endurance", "desc": "Améliorer ton cardio", "icon": Icons.directions_run_rounded, "color": Color(0xFF2196F3), "sessions": "4x/semaine", "duration": "50 min"},
+    {"title": "Débutant", "desc": "Commencer progressivement", "icon": Icons.star_outline_rounded, "color": Color(0xFFFFBB33), "sessions": "3x/semaine", "duration": "40 min"},
+    {"title": "Maison", "desc": "Sans équipement", "icon": Icons.home_rounded, "color": Color(0xFF9C27B0), "sessions": "4x/semaine", "duration": "35 min"},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final squat = userData['squat_weight'] ?? '--';
+    final bench = userData['bench_weight'] ?? '--';
+    final deadlift = userData['deadlift_weight'] ?? '--';
+
+    return SafeArea(
+      bottom: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text("Entraînements", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kText)),
+          const SizedBox(height: 4),
+          Text("Choisis ton programme", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
+          if (squat != '--' || bench != '--' || deadlift != '--') ...[
+            const SizedBox(height: 24),
+            const Text("MES CHARGES", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 12),
+            Row(children: [
+              if (squat != '--') Expanded(child: _chargeCard("Squat", squat, kOrange)),
+              if (squat != '--' && bench != '--') const SizedBox(width: 10),
+              if (bench != '--') Expanded(child: _chargeCard("Bench", bench, const Color(0xFF4CAF50))),
+              if (bench != '--' && deadlift != '--') const SizedBox(width: 10),
+              if (deadlift != '--') Expanded(child: _chargeCard("Deadlift", deadlift, const Color(0xFF2196F3))),
+            ]),
+          ],
+          const SizedBox(height: 24),
+          const Text("PROGRAMMES", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          GridView.builder(
+            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.2),
+            itemCount: programs.length,
+            itemBuilder: (context, index) {
+              final p = programs[index];
+              return Clickable(
+                onTap: () => showDialog(context: context, builder: (context) => ProgramDetailDialog(program: p)),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: (p['color'] as Color).withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(p['icon'] as IconData, color: p['color'] as Color, size: 20)),
+                    const Spacer(),
+                    Text(p['title'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+                    const SizedBox(height: 2),
+                    Text("${p['sessions']} · ${p['duration']}", style: const TextStyle(fontSize: 11, color: kTextDim)),
+                  ]),
+                ),
+              );
+            },
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _chargeCard(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withOpacity(0.2))),
+      child: Column(children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: kTextDim, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text("$value kg", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+      ]),
+    );
+  }
+}
+
+class ProgramDetailDialog extends StatelessWidget {
+  final Map<String, dynamic> program;
+  const ProgramDetailDialog({super.key, required this.program});
+
+  @override
+  Widget build(BuildContext context) {
+    final exercises = ["Squat", "Presse à cuisses", "Fentes", "Leg curl", "Mollets debout"];
+    return Dialog(
+      backgroundColor: kBg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: SizedBox(
+        width: 500,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: (program['color'] as Color).withOpacity(0.15), borderRadius: BorderRadius.circular(14)), child: Icon(program['icon'] as IconData, color: program['color'] as Color, size: 24)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(program['title'] as String, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
+                Text(program['desc'] as String, style: const TextStyle(fontSize: 12, color: kTextDim)),
+              ])),
+              Clickable(onTap: () => Navigator.pop(context), child: const Icon(Icons.close_rounded, color: Color(0xFF555555), size: 20)),
+            ]),
+            const SizedBox(height: 20),
+            const Text("PLANNING", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1)),
+            const SizedBox(height: 10),
+            Row(children: ["L", "M", "M", "J", "V", "S", "D"].asMap().entries.map((e) {
+              final active = [0, 2, 4].contains(e.key);
+              return Expanded(child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(color: active ? kOrange : kCard2, borderRadius: BorderRadius.circular(8), border: Border.all(color: active ? kOrange : kBorder)),
+                child: Text(e.value, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? Colors.white : const Color(0xFF555555))),
+              ));
+            }).toList()),
+            const SizedBox(height: 20),
+            const Text("EXERCICES", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1)),
+            const SizedBox(height: 10),
+            ...exercises.asMap().entries.map((e) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+              child: Row(children: [
+                Container(width: 28, height: 28, decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Center(child: Text("${e.key + 1}", style: const TextStyle(fontSize: 12, color: kOrange, fontWeight: FontWeight.bold)))),
+                const SizedBox(width: 12),
+                Expanded(child: Text(e.value, style: const TextStyle(fontSize: 14, color: kText))),
+                const Text("4×8", style: TextStyle(fontSize: 12, color: kTextDim)),
+              ]),
+            )).toList(),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ===================== PAGE NUTRITION =====================
+
+class NutritionPage extends StatelessWidget {
+  final Map<String, String> userData;
+  const NutritionPage({super.key, required this.userData});
+
+  @override
+  Widget build(BuildContext context) {
+    final calories = userData['calories'] ?? '2400';
+    final meals = [
+      {"title": "Petit déjeuner", "time": "7h00", "kcal": "520", "protein": "32g", "icon": Icons.wb_sunny_rounded, "color": const Color(0xFFFFBB33), "done": true},
+      {"title": "Déjeuner", "time": "12h30", "kcal": "680", "protein": "55g", "icon": Icons.restaurant_rounded, "color": const Color(0xFF4CAF50), "done": true},
+      {"title": "Snack", "time": "16h00", "kcal": "220", "protein": "18g", "icon": Icons.apple_rounded, "color": kOrange, "done": false},
+      {"title": "Dîner", "time": "19h30", "kcal": "580", "protein": "48g", "icon": Icons.nightlight_rounded, "color": const Color(0xFF6C63FF), "done": false},
+    ];
+    final totalKcal = 520 + 680;
+    final targetKcal = int.tryParse(calories) ?? 2400;
+    final progress = totalKcal / targetKcal;
+
+    return SafeArea(
+      bottom: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text("Nutrition", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kText)),
+          const SizedBox(height: 4),
+          Text("Suis ton alimentation", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
+            child: Column(children: [
+              Row(children: [
+                const Text("Calories aujourd'hui", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+                const Spacer(),
+                Text("$totalKcal / $targetKcal kcal", style: const TextStyle(fontSize: 13, color: kTextDim)),
+              ]),
+              const SizedBox(height: 14),
+              ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: progress.clamp(0.0, 1.0), backgroundColor: kBorder, valueColor: const AlwaysStoppedAnimation(kOrange), minHeight: 8)),
+              const SizedBox(height: 14),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                _macroChip("Protéines", "87g", const Color(0xFF4CAF50)),
+                _macroChip("Glucides", "180g", Colors.blue),
+                _macroChip("Lipides", "45g", Colors.amber),
+              ]),
+            ]),
+          ),
+          const SizedBox(height: 24),
+          const Text("REPAS DU JOUR", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          ...meals.map((meal) => Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: (meal['done'] as bool) ? (meal['color'] as Color).withOpacity(0.2) : kBorder)),
+            child: Row(children: [
+              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: (meal['color'] as Color).withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(meal['icon'] as IconData, color: meal['color'] as Color, size: 20)),
+              const SizedBox(width: 14),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(meal['title'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+                const SizedBox(height: 2),
+                Text("${meal['kcal']} kcal · ${meal['protein']} protéines · ${meal['time']}", style: const TextStyle(fontSize: 12, color: kTextDim)),
+              ])),
+              if (meal['done'] as bool)
+                Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: const Color(0xFF4CAF50).withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.check_rounded, color: Color(0xFF4CAF50), size: 14))
+              else
+                Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: kCard2, shape: BoxShape.circle, border: Border.all(color: kBorder)), child: const Icon(Icons.add_rounded, color: kTextDim, size: 14)),
+            ]),
+          )).toList(),
+        ]),
+      ),
+    );
+  }
+
+  Widget _macroChip(String label, String value, Color color) {
+    return Column(children: [
+      Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+      const SizedBox(height: 2),
+      Text(label, style: const TextStyle(fontSize: 11, color: kTextDim)),
+    ]);
   }
 }
 
@@ -610,35 +971,28 @@ class ProgressPage extends StatelessWidget {
   Widget _statCard(String label, String value, String change, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.35), fontWeight: FontWeight.w600)),
+        Text(label, style: const TextStyle(fontSize: 11, color: kTextDim, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kText)),
         const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
-          child: Text(change, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
-        ),
+        Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: Text(change, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600))),
       ]),
     );
   }
 
   Widget _exerciseBar(String name, String value, double progress, Color color) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text(name, style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w500)),
+          Text(name, style: const TextStyle(fontSize: 13, color: kText, fontWeight: FontWeight.w500)),
           const Spacer(),
-          Text(value, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5))),
+          Text(value, style: const TextStyle(fontSize: 13, color: kTextDim)),
         ]),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(value: progress, backgroundColor: kBorder, valueColor: AlwaysStoppedAnimation(color), minHeight: 6),
-        ),
+        const SizedBox(height: 8),
+        ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: progress.clamp(0.0, 1.0), backgroundColor: kBorder, valueColor: AlwaysStoppedAnimation(color), minHeight: 6)),
       ]),
     );
   }
@@ -652,20 +1006,21 @@ class ProgressPage extends StatelessWidget {
     final sessions = userData['sessions_per_week'] ?? '--';
     final streak = userData['streak'] ?? '--';
     final lastScore = userData['last_squat_score'] ?? '--';
-
-    double squatProgress = squat != '--' ? (double.tryParse(squat) ?? 0) / 200 : 0.5;
-    double benchProgress = bench != '--' ? (double.tryParse(bench) ?? 0) / 150 : 0.5;
-    double deadliftProgress = deadlift != '--' ? (double.tryParse(deadlift) ?? 0) / 250 : 0.5;
+    final goal = userData['goal'] ?? '';
+    double squatProgress = squat != '--' ? (double.tryParse(squat) ?? 0) / 200 : 0.3;
+    double benchProgress = bench != '--' ? (double.tryParse(bench) ?? 0) / 150 : 0.3;
+    double deadliftProgress = deadlift != '--' ? (double.tryParse(deadlift) ?? 0) / 250 : 0.3;
 
     return SafeArea(
+      bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("Progression", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+          const Text("Progression", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kText)),
           const SizedBox(height: 4),
           Text("Suis tes performances", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
           const SizedBox(height: 24),
-          const Text("MON PROFIL", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const Text("CE MOIS", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 12),
           GridView.count(
             crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
@@ -678,42 +1033,37 @@ class ProgressPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          const Text("MES CHARGES", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const Text("MES CHARGES", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
             child: Column(children: [
-              _exerciseBar("Squat", squat != '--' ? "$squat kg" : "Non renseigné", squatProgress.clamp(0.0, 1.0), kOrange),
-              _exerciseBar("Développé couché", bench != '--' ? "$bench kg" : "Non renseigné", benchProgress.clamp(0.0, 1.0), const Color(0xFF4CAF50)),
-              _exerciseBar("Soulevé de terre", deadlift != '--' ? "$deadlift kg" : "Non renseigné", deadliftProgress.clamp(0.0, 1.0), const Color(0xFF2196F3)),
+              _exerciseBar("Squat", squat != '--' ? "$squat kg" : "Non renseigné", squatProgress, kOrange),
+              _exerciseBar("Développé couché", bench != '--' ? "$bench kg" : "Non renseigné", benchProgress, const Color(0xFF4CAF50)),
+              _exerciseBar("Soulevé de terre", deadlift != '--' ? "$deadlift kg" : "Non renseigné", deadliftProgress, const Color(0xFF2196F3)),
             ]),
           ),
           const SizedBox(height: 24),
-          const Text("RÉSUMÉ IA", style: TextStyle(fontSize: 11, color: Colors.white24, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const Text("RÉSUMÉ IA", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kOrange.withOpacity(0.3))),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kOrange.withOpacity(0.2))),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.auto_awesome, color: kOrange, size: 16)),
-                const SizedBox(width: 8),
-                const Text("Analyse de la semaine", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.auto_awesome_rounded, color: kOrange, size: 16)),
+                const SizedBox(width: 10),
+                const Text("Analyse IA", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
               ]),
               const SizedBox(height: 12),
-              Text(
-                userData['goal'] != null && userData['goal']!.isNotEmpty
-                    ? "Objectif : ${userData['goal']}. Continue à travailler et parle à ton coach pour un bilan complet !"
-                    : "Parle à ton coach IA pour obtenir un résumé personnalisé de ta semaine.",
-                style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.7), height: 1.5),
-              ),
-              const SizedBox(height: 12),
+              Text(goal.isNotEmpty ? "Objectif : $goal. Continue à travailler et parle à ton coach pour un bilan complet !" : "Parle à ton coach IA pour obtenir un résumé personnalisé de ta semaine.", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6), height: 1.5)),
+              const SizedBox(height: 14),
               ElevatedButton.icon(
                 onPressed: () {},
-                icon: const Icon(Icons.psychology, size: 15),
-                label: const Text("Demander un bilan complet", style: TextStyle(fontSize: 13)),
-                style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
+                icon: const Icon(Icons.psychology_rounded, size: 15),
+                label: const Text("Demander un bilan", style: TextStyle(fontSize: 13)),
+                style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
               ),
             ]),
           ),
@@ -760,10 +1110,7 @@ class _ChatViewState extends State<ChatView> {
   Future<void> pickVideo() async {
     FilePickerResult? picked = await FilePicker.platform.pickFiles(type: FileType.video, withData: true);
     if (picked != null) {
-      setState(() {
-        pendingVideoBytes = picked.files.single.bytes;
-        pendingVideoName = picked.files.single.name;
-      });
+      setState(() { pendingVideoBytes = picked.files.single.bytes; pendingVideoName = picked.files.single.name; });
     }
   }
 
@@ -802,16 +1149,13 @@ class _ChatViewState extends State<ChatView> {
       var body = await response.stream.bytesToString();
       final json = jsonDecode(body);
       final String assistantContent = json['response'] ?? '';
-
       setState(() {
         messages.add({"role": "assistant", "content": assistantContent, "video_filename": null});
         isLoading = false;
       });
-
       if (messages.length == 2) {
         widget.onTitleUpdate(displayText.length > 40 ? displayText.substring(0, 40) + '...' : displayText);
       }
-
       widget.onMessageSent();
       _scrollToBottom();
     } catch (e) {
@@ -836,20 +1180,20 @@ class _ChatViewState extends State<ChatView> {
       Expanded(
         child: messages.isEmpty && !isLoading
             ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.chat_bubble_outline, size: 36, color: Colors.white.withOpacity(0.08)),
+                Icon(Icons.chat_bubble_outline_rounded, size: 36, color: Colors.white.withOpacity(0.06)),
                 const SizedBox(height: 12),
                 Text("Pose une question ou envoie une vidéo", style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14)),
               ]))
             : ListView.builder(
                 controller: _scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                 itemCount: messages.length + (isLoading ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (index == messages.length) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Row(children: [
-                        Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.psychology, size: 13, color: kOrange)),
+                        Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.psychology_rounded, size: 13, color: kOrange)),
                         const SizedBox(width: 8),
                         Text("Coach en train de réfléchir...", style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13)),
                         const SizedBox(width: 8),
@@ -866,7 +1210,7 @@ class _ChatViewState extends State<ChatView> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (!isUser) ...[
-                          Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.psychology, size: 13, color: kOrange)),
+                          Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: kOrange.withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.psychology_rounded, size: 13, color: kOrange)),
                           const SizedBox(width: 8),
                         ],
                         Flexible(
@@ -875,9 +1219,9 @@ class _ChatViewState extends State<ChatView> {
                             decoration: BoxDecoration(
                               color: isUser ? kOrange : kCard,
                               borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(14), topRight: const Radius.circular(14),
-                                bottomLeft: Radius.circular(isUser ? 14 : 4),
-                                bottomRight: Radius.circular(isUser ? 4 : 14),
+                                topLeft: const Radius.circular(16), topRight: const Radius.circular(16),
+                                bottomLeft: Radius.circular(isUser ? 16 : 4),
+                                bottomRight: Radius.circular(isUser ? 4 : 16),
                               ),
                               border: isUser ? null : Border.all(color: kBorder),
                             ),
@@ -886,7 +1230,7 @@ class _ChatViewState extends State<ChatView> {
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 5),
                                   child: Row(children: [
-                                    const Icon(Icons.videocam, size: 12, color: Colors.white70),
+                                    const Icon(Icons.videocam_rounded, size: 12, color: Colors.white70),
                                     const SizedBox(width: 4),
                                     Flexible(child: Text(msg['video_filename'] as String, style: const TextStyle(fontSize: 11, color: Colors.white70))),
                                   ]),
@@ -916,23 +1260,23 @@ class _ChatViewState extends State<ChatView> {
               ),
       ),
       Container(
-        padding: const EdgeInsets.all(14),
-        decoration: const BoxDecoration(color: kSidebar, border: Border(top: BorderSide(color: kBorder))),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+        decoration: BoxDecoration(color: const Color(0xFF111111), border: Border(top: BorderSide(color: kBorder))),
         child: Column(children: [
           if (pendingVideoName != null)
             Container(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(color: kOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: kOrange.withOpacity(0.3))),
+              decoration: BoxDecoration(color: kOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: kOrange.withOpacity(0.2))),
               child: Row(children: [
-                const Icon(Icons.videocam, size: 14, color: kOrange),
+                const Icon(Icons.videocam_rounded, size: 14, color: kOrange),
                 const SizedBox(width: 8),
                 Expanded(child: Text(pendingVideoName!, style: const TextStyle(fontSize: 12, color: Colors.white70))),
-                Clickable(onTap: () => setState(() { pendingVideoBytes = null; pendingVideoName = null; }), child: Icon(Icons.close, size: 14, color: Colors.white.withOpacity(0.3))),
+                Clickable(onTap: () => setState(() { pendingVideoBytes = null; pendingVideoName = null; }), child: Icon(Icons.close_rounded, size: 14, color: Colors.white.withOpacity(0.3))),
               ]),
             ),
           Row(children: [
-            MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_outlined, color: kOrange, size: 20), tooltip: "Envoyer une vidéo")),
+            MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_rounded, color: kOrange, size: 20), tooltip: "Envoyer une vidéo")),
             Expanded(
               child: TextField(
                 controller: _controller,
@@ -941,12 +1285,12 @@ class _ChatViewState extends State<ChatView> {
                 keyboardType: TextInputType.text,
                 decoration: InputDecoration(
                   hintText: "Pose une question à ton coach...",
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.25), fontSize: 14),
-                  filled: true, fillColor: kBg,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kOrange, width: 1.5)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
+                  filled: true, fillColor: kCard2,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
                 onSubmitted: (_) => sendMessage(),
               ),
@@ -955,8 +1299,8 @@ class _ChatViewState extends State<ChatView> {
             Clickable(
               onTap: () => sendMessage(),
               child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: isLoading ? kOrange.withOpacity(0.3) : kOrange, borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(color: isLoading ? kOrange.withOpacity(0.3) : kOrange, borderRadius: BorderRadius.circular(12)),
                 child: const Icon(Icons.send_rounded, color: Colors.white, size: 17),
               ),
             ),
@@ -1003,7 +1347,6 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> saveProfile() async {
-    // Sauvegarder localement
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('name', _nameController.text);
     await prefs.setString('age', _ageController.text);
@@ -1011,41 +1354,27 @@ class _ProfilePageState extends State<ProfilePage> {
     await prefs.setString('height', _heightController.text);
     await prefs.setString('goal', _goalController.text);
     await prefs.setString('level', selectedLevel);
-
-    // Sauvegarder dans la base de données backend
-    final data = {
-      'name': _nameController.text,
-      'age': _ageController.text,
-      'weight': _weightController.text,
-      'height': _heightController.text,
-      'goal': _goalController.text,
-      'level': selectedLevel,
-    };
+    final data = {'name': _nameController.text, 'age': _ageController.text, 'weight': _weightController.text, 'height': _heightController.text, 'goal': _goalController.text, 'level': selectedLevel};
     var request = http.MultipartRequest('PUT', Uri.parse('$kBaseUrl/user-data/'));
     request.fields['data'] = jsonEncode(data);
     await request.send();
-
     setState(() => saved = true);
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) Navigator.pop(context);
-    });
+    Future.delayed(const Duration(seconds: 1), () { if (mounted) Navigator.pop(context); });
   }
 
   Widget _field(String label, TextEditingController controller, {String? hint, TextInputType? type}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(fontSize: 11, color: Colors.white38, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+      Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF666666), fontWeight: FontWeight.w600, letterSpacing: 0.8)),
       const SizedBox(height: 6),
       TextField(
-        controller: controller,
-        keyboardType: type,
-        style: const TextStyle(color: Colors.white, fontSize: 14),
+        controller: controller, keyboardType: type,
+        style: const TextStyle(color: kText, fontSize: 14),
         decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
-          filled: true, fillColor: kCard,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+          hintText: hint, hintStyle: const TextStyle(color: Color(0xFF444444), fontSize: 14),
+          filled: true, fillColor: kCard2,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kBorder)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kOrange, width: 1.5)),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         ),
       ),
@@ -1059,13 +1388,13 @@ class _ProfilePageState extends State<ProfilePage> {
       padding: const EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.person, color: kOrange, size: 20)),
+          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.person_rounded, color: kOrange, size: 20)),
           const SizedBox(width: 12),
           const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text("Mon profil", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text("Le coach adapte ses conseils à ton profil", style: TextStyle(fontSize: 12, color: Colors.white38)),
+            Text("Mon profil", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
+            Text("Le coach adapte ses conseils à ton profil", style: TextStyle(fontSize: 12, color: kTextDim)),
           ])),
-          Clickable(onTap: () => Navigator.pop(context), child: const Icon(Icons.close, color: Colors.white38, size: 20)),
+          Clickable(onTap: () => Navigator.pop(context), child: const Icon(Icons.close_rounded, color: Color(0xFF555555), size: 20)),
         ]),
         const SizedBox(height: 24),
         _field("PRÉNOM", _nameController, hint: "Ex: Thomas"),
@@ -1076,7 +1405,7 @@ class _ProfilePageState extends State<ProfilePage> {
           const SizedBox(width: 12),
           Expanded(child: _field("TAILLE (cm)", _heightController, hint: "180", type: TextInputType.number)),
         ]),
-        const Text("NIVEAU", style: TextStyle(fontSize: 11, color: Colors.white38, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+        const Text("NIVEAU", style: TextStyle(fontSize: 11, color: Color(0xFF666666), fontWeight: FontWeight.w600, letterSpacing: 0.8)),
         const SizedBox(height: 8),
         Row(children: levels.map((l) {
           final isSelected = selectedLevel == l['key'];
@@ -1086,8 +1415,8 @@ class _ProfilePageState extends State<ProfilePage> {
               duration: const Duration(milliseconds: 150),
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(color: isSelected ? kOrange : kCard, borderRadius: BorderRadius.circular(10), border: Border.all(color: isSelected ? kOrange : kBorder)),
-              child: Text(l['label']!, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : Colors.white54, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
+              decoration: BoxDecoration(color: isSelected ? kOrange : kCard2, borderRadius: BorderRadius.circular(10), border: Border.all(color: isSelected ? kOrange : kBorder)),
+              child: Text(l['label']!, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : const Color(0xFF666666), fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
             ),
           ));
         }).toList()),
@@ -1097,13 +1426,7 @@ class _ProfilePageState extends State<ProfilePage> {
           width: double.infinity,
           child: ElevatedButton(
             onPressed: saveProfile,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: saved ? Colors.green : kOrange,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: saved ? const Color(0xFF4CAF50) : kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
             child: Text(saved ? "✓ Sauvegardé !" : "Sauvegarder", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
           ),
         ),

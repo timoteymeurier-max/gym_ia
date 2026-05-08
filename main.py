@@ -457,11 +457,13 @@ async def get_all_user_data():
 async def update_user_data(data: str = Form(...)):
     db = DBSession()
     try:
-        parsed = json.loads(data)
-        for k, v in parsed.items():
-            if v:
-                set_user_data(db, k, str(v))
+            parsed = json.loads(data)
+            for k, v in parsed.items():
+                if v:
+                    set_user_data(db, k, str(v))
+            if 'weight' in parsed and parsed['weight']:
+                add_weight_history(db, parsed['weight'], datetime.now().strftime("%d/%m"))
     except:
-        pass
+            pass
     db.close()
     return {"message": "updated"}
