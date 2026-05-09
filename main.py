@@ -467,3 +467,52 @@ async def update_user_data(data: str = Form(...)):
             pass
     db.close()
     return {"message": "updated"}
+
+@app.get("/daily-message/")
+async def get_daily_message():
+    db = DBSession()
+    user_data = get_user_data(db)
+    db.close()
+
+    name = user_data.get('name', '')
+    weight = user_data.get('weight', '')
+    squat = user_data.get('squat_weight', '')
+    streak = user_data.get('streak', '')
+    goal = user_data.get('goal', '')
+    last_score = user_data.get('last_squat_score', '')
+    level = user_data.get('level', '')
+
+    profile_text = f"""
+Infos sur l'athlète :
+- Prénom : {name if name else 'Non renseigné'}
+- Poids : {weight if weight else 'Non renseigné'} kg
+- Squat : {squat if squat else 'Non renseigné'} kg
+- Streak : {streak if streak else 'Non renseigné'} jours
+- Objectif : {goal if goal else 'Non renseigné'}
+- Niveau : {level if level else 'Non renseigné'}
+- Dernier score squat : {last_score if last_score else 'Non renseigné'}/100
+"""
+
+    prompt = f"""Tu es un coach sportif IA. Génère UNE SEULE phrase de motivation personnalisée pour cet athlète.
+
+{profile_text}
+
+Règles STRICTES :
+- Maximum 12 mots
+- Utilise le prénom si disponible
+- Fais référence à une de ses stats si disponible
+- Tutoie toujours
+- 1 emoji maximum
+- Pas de guillemets
+- Juste la phrase, rien d'autre"""
+
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=50,
+        )
+        message = response.choices[0].message.content.strip()
+        return {"message": message}
+    except:
+        return {"message": "Prêt à battre ton record aujourd'hui ? 🔥"}

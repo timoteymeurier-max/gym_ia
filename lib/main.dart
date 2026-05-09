@@ -18,7 +18,7 @@ const kCard2 = Color(0xFF1E1E1E);
 const kBorder = Color(0xFF2A2A2A);
 const kText = Colors.white;
 const kTextDim = Color(0xFF888888);
-const String kBaseUrl = 'http://127.0.0.1:8000';
+const String kBaseUrl = 'https://gym-ia-n9tf.onrender.com';
 
 class Clickable extends StatelessWidget {
   final Widget child;
@@ -186,8 +186,34 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    final messages = _getPersonalizedMessages();
-    _currentMessage = messages[Random().nextInt(messages.length)];
+    _currentMessage = "";
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) _loadAIMessage();
+    });
+  }
+
+  @override
+  void didUpdateWidget(HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+  }
+
+  Future<void> _loadAIMessage() async {
+    try {
+      final uri = Uri.parse('$kBaseUrl/daily-message/');
+      final response = await http.get(uri, headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      });
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final msg = data['message']?.toString() ?? '';
+        if (msg.isNotEmpty && mounted) {
+          setState(() => _currentMessage = msg);
+        }
+      }
+    } catch (e) {
+      print('Erreur daily message: $e');
+    }
   }
 
   @override
@@ -259,11 +285,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 const Spacer(),
 
                 // PHRASE IA — centre absolu comme ChatGPT
-                Text(
-                  _currentMessage,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, height: 1.4, letterSpacing: -0.5),
-                ),
+                _currentMessage.isEmpty
+                    ? const Center(child: CircularProgressIndicator(color: kOrange, strokeWidth: 2))
+                    : Text(
+                        _currentMessage,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, height: 1.4, letterSpacing: -0.5),
+                      ),
                 const SizedBox(height: 32),
 
                 // BARRE DE SAISIE
