@@ -68,6 +68,19 @@ class UserData(Base):
 Base.metadata.create_all(engine)
 DBSession = sessionmaker(bind=engine)
 
+# Migration : ajout colonne device_id si elle n'existe pas
+from sqlalchemy import text, inspect
+inspector = inspect(engine)
+cols_user_data = [c['name'] for c in inspector.get_columns('user_data')]
+cols_conversations = [c['name'] for c in inspector.get_columns('conversations')]
+with engine.connect() as conn:
+    if 'device_id' not in cols_user_data:
+        conn.execute(text("ALTER TABLE user_data ADD COLUMN device_id VARCHAR DEFAULT 'default'"))
+        conn.commit()
+    if 'device_id' not in cols_conversations:
+        conn.execute(text("ALTER TABLE conversations ADD COLUMN device_id VARCHAR DEFAULT 'default'"))
+        conn.commit()
+
 def get_user_data(db, device_id="default"):
     rows = db.query(UserData).filter(UserData.device_id == device_id).all()
     return {r.key: r.value for r in rows}
