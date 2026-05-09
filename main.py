@@ -398,6 +398,17 @@ async def chat(
 
     return {"response": full_response, "video_data": video_data, "video_filename": video_filename, "updated_user_data": extracted}
 
+
+@app.get("/migrate/")
+async def migrate():
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE user_data ADD COLUMN IF NOT EXISTS device_id VARCHAR DEFAULT 'default'"))
+        conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS device_id VARCHAR DEFAULT 'default'"))
+        conn.commit()
+    return {"message": "Migration OK"}
+
+
 @app.get("/user-data/")
 async def get_all_user_data(x_device_id: str = Header(default="default")):
     db = DBSession()
