@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:async';
 
 void main() {
   runApp(const MyApp());
@@ -20,7 +21,6 @@ const kText = Colors.white;
 const kTextDim = Color(0xFF888888);
 const String kBaseUrl = 'https://gym-ia-n9tf.onrender.com';
 
-// Génère un device_id unique par appareil
 Future<String> getDeviceId() async {
   final prefs = await SharedPreferences.getInstance();
   String? deviceId = prefs.getString('device_id');
@@ -56,6 +56,8 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// ===================== ROOT PAGE =====================
+
 class RootPage extends StatefulWidget {
   const RootPage({super.key});
   @override
@@ -66,17 +68,25 @@ class _RootPageState extends State<RootPage> {
   int _currentIndex = 0;
   Map<String, String> userData = {};
   String deviceId = '';
+  String dailyMessage = '';
 
   @override
   void initState() {
     super.initState();
-    _initDeviceId();
+    _init();
   }
 
-  Future<void> _initDeviceId() async {
+  Future<void> _init() async {
+    // Étape 1 : générer device_id
     final id = await getDeviceId();
+    if (!mounted) return;
     setState(() => deviceId = id);
-    loadUserData();
+
+    // Étape 2 : charger user-data (réveille Render au passage)
+    await loadUserData();
+
+    // Étape 3 : charger le message IA (Render est maintenant réveillé)
+    await _loadDailyMessage();
   }
 
   Future<void> loadUserData() async {
@@ -85,14 +95,35 @@ class _RootPageState extends State<RootPage> {
       final response = await http.get(
         Uri.parse('$kBaseUrl/user-data/'),
         headers: {'x-device-id': deviceId},
-      );
-      if (response.statusCode == 200) {
+      ).timeout(const Duration(seconds: 60));
+      if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         setState(() => userData = data.map((k, v) => MapEntry(k, v.toString())));
       }
     } catch (e) {
-      setState(() => userData = {});
+      if (mounted) setState(() => userData = {});
     }
+  }
+
+  Future<void> _loadDailyMessage() async {
+    if (deviceId.isEmpty) return;
+    try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/daily-message/?t=$timestamp'),
+        headers: {'x-device-id': deviceId},
+      ).timeout(const Duration(seconds: 60));
+      if (response.statusCode == 200 && mounted) {
+        final data = jsonDecode(response.body);
+        final msg = data['message']?.toString() ?? '';
+        if (msg.isNotEmpty) setState(() => dailyMessage = msg);
+      }
+    } catch (e) {}
+  }
+
+  Future<void> refreshAll() async {
+    await loadUserData();
+    await _loadDailyMessage();
   }
 
   @override
@@ -109,7 +140,12 @@ class _RootPageState extends State<RootPage> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          HomePage(userData: userData, onUserDataChanged: loadUserData, deviceId: deviceId),
+          HomePage(
+            userData: userData,
+            onUserDataChanged: refreshAll,
+            deviceId: deviceId,
+            dailyMessage: dailyMessage,
+          ),
           CoachPage(onMessageSent: loadUserData, deviceId: deviceId),
           TrainingPage(userData: userData),
           NutritionPage(userData: userData),
@@ -168,35 +204,14 @@ class HomePage extends StatefulWidget {
   final Map<String, String> userData;
   final VoidCallback onUserDataChanged;
   final String deviceId;
-  const HomePage({super.key, required this.userData, required this.onUserDataChanged, required this.deviceId});
+  final String dailyMessage;
+  const HomePage({super.key, required this.userData, required this.onUserDataChanged, required this.deviceId, required this.dailyMessage});
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+class _HomePageState extends State<HomePage> {
   final TextEditingController _chatController = TextEditingController();
-  String _currentMessage = "";
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAIMessage();
-  }
-
-  Future<void> _loadAIMessage() async {
-    try {
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final uri = Uri.parse('$kBaseUrl/daily-message/?t=$timestamp');
-      final response = await http.get(uri, headers: {'x-device-id': widget.deviceId});
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final msg = data['message']?.toString() ?? '';
-        if (msg.isNotEmpty && mounted) {
-          setState(() => _currentMessage = msg);
-        }
-      }
-    } catch (e) {}
-  }
 
   @override
   void dispose() {
@@ -229,7 +244,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildScrollContent() {
-    final name = widget.userData['name'] ?? '';
     final weight = widget.userData['weight'] ?? '--';
     final sessions = widget.userData['sessions_per_week'] ?? '--';
     final squat = widget.userData['squat_weight'] ?? '--';
@@ -267,15 +281,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         ),
                       );
                       widget.onUserDataChanged();
-                      _loadAIMessage();
                     },
                     child: Container(width: 36, height: 36, decoration: BoxDecoration(color: kCard2, shape: BoxShape.circle, border: Border.all(color: kBorder)), child: const Icon(Icons.person_rounded, color: kTextDim, size: 17)),
                   ),
                 ]),
                 const Spacer(),
-                _currentMessage.isEmpty
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: kOrange, strokeWidth: 1.5))
-                    : Text(_currentMessage, textAlign: TextAlign.center, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, height: 1.4, letterSpacing: -0.5)),
+
+                // MESSAGE IA — généré par Groq dans RootPage
+                widget.dailyMessage.isEmpty
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: kOrange, strokeWidth: 2))
+                    : Text(
+                        widget.dailyMessage,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, height: 1.4, letterSpacing: -0.5),
+                      ),
+
                 const SizedBox(height: 32),
                 Container(
                   decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),

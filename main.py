@@ -33,7 +33,14 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///sessions.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=2,
+    max_overflow=3,
+    pool_timeout=30,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 Base = declarative_base()
 
 class Conversation(Base):
@@ -101,13 +108,10 @@ def add_weight_history(db, device_id, weight, date):
 def extract_user_data_from_message(message, ai_response):
     prompt = f"""Analyse ce message et la réponse du coach.
 Extrait UNIQUEMENT les infos factuelles sur l'utilisateur.
-
 Message: {message}
 Réponse: {ai_response}
-
 Retourne UNIQUEMENT un JSON valide avec les clés pertinentes parmi :
 name, age, weight, height, goal, level, squat_weight, bench_weight, deadlift_weight, sessions_per_week, streak, calories
-
 Si aucune info retourne {{}}.
 Ne retourne QUE le JSON."""
     try:
@@ -274,13 +278,11 @@ Profil :
     system_prompt = f"""Tu es un coach sportif IA nouvelle génération.
 {profile_text}
 STYLE : Direct, motivant, tutoie toujours, emojis modérés (max 3), jamais plus de 200 mots sauf analyse vidéo.
-
 ANALYSE VIDÉO — structure obligatoire :
 **Ce que tu fais bien ✅** (1-2 points)
 **Ce qu'on améliore 🎯** (1-2 points avec correction)
 **Conseil prochaine séance 💡** (1 conseil actionnable)
 **Charge** : Augmenter/Maintenir/Réduire + pourquoi
-
 QUESTIONS : Réponse directe 3-5 phrases, terminer par conseil actionnable.
 Réponds toujours en français."""
 
@@ -452,7 +454,7 @@ Profil :
 - Dernier score : {last_score or 'Non renseigné'}/100
 
 Varie le style : question directe, défi, référence aux stats, motivation raw, humour sportif.
-Règles : max 15 mots, utilise le prénom, tutoie, 1 emoji max, pas de guillemets, juste la phrase."""
+Règles : max 15 mots, utilise le prénom si disponible, tutoie, 1 emoji max, pas de guillemets, juste la phrase."""
     else:
         prompt = """Tu es un coach sportif IA moderne style TikTok fitness. Génère UNE phrase de motivation sportive générale.
 Varie le style : question, défi, motivation raw, humour sportif.
@@ -467,5 +469,5 @@ Règles : max 15 mots, tutoie, 1 emoji max, pas de guillemets, juste la phrase."
         message = response.choices[0].message.content.strip()
         return {"message": message}
     except Exception as e:
-        print(f"Erreur Groq: {e}")
-        return {"message": "Allez, on donne tout aujourd'hui ! 💪"}
+        print(f"Erreur Groq daily-message: {e}")
+        return {"message": "Erreur serveur"}
