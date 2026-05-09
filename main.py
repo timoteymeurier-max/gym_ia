@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
-from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, Text, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from dotenv import load_dotenv
@@ -31,6 +31,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///sessions.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 engine = create_engine(DATABASE_URL)
 Base = declarative_base()
 
@@ -69,12 +71,31 @@ def get_user_data(db):
 
 def set_user_data(db, key, value):
     row = db.query(UserData).filter(UserData.key == key).first()
-    if row:
-        row.value = str(value)
-        row.updated_at = datetime.now()
+    if str(value).strip() == '':
+        # Supprimer la clé si valeur vide
+        if row:
+            db.delete(row)
+            db.commit()
     else:
-        db.add(UserData(key=key, value=str(value)))
-    db.commit()
+        if row:
+            row.value = str(value)
+            row.updated_at = datetime.now()
+        else:
+            db.add(UserData(key=key, value=str(value)))
+        db.commit()
+
+def add_weight_history(db, weight, date):
+    row = db.query(UserData).filter(UserData.key == "weight_history").first()
+    if row:
+        try:
+            history = json.loads(row.value)
+        except:
+            history = []
+    else:
+        history = []
+    history.append({"date": date, "weight": float(weight)})
+    history = history[-30:]
+    set_user_data(db, "weight_history", json.dumps(history))
 
 def extract_user_data_from_message(message, ai_response):
     prompt = f"""Analyse ce message d'un utilisateur et la réponse du coach.
@@ -84,23 +105,12 @@ Message utilisateur: {message}
 Réponse coach: {ai_response}
 
 Retourne UNIQUEMENT un JSON valide avec les clés pertinentes parmi :
-- name (prénom)
-- age (age en chiffre)
-- weight (poids en kg, chiffre)
-- height (taille en cm, chiffre)
-- goal (objectif principal)
-- level (debutant/intermediaire/avance)
-- squat_weight (charge squat en kg)
-- bench_weight (charge développé couché en kg)
-- deadlift_weight (charge soulevé de terre en kg)
-- sessions_per_week (séances par semaine)
-- last_session_date (date dernière séance)
-- streak (jours consécutifs)
-- calories (calories journalières)
+- name, age, weight, height, goal, level
+- squat_weight, bench_weight, deadlift_weight
+- sessions_per_week, streak, calories
 
 Si aucune info n'est trouvée retourne {{}}.
 Ne retourne QUE le JSON, sans explication."""
-
     try:
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -129,14 +139,10 @@ def analyze_video(video_path):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     frame_count = 0
-
-    angles_knee_left = []
-    angles_knee_right = []
-    angles_hip_left = []
-    angles_hip_right = []
+    angles_knee_left, angles_knee_right = [], []
+    angles_hip_left, angles_hip_right = [], []
     angles_back = []
-    knee_x_left = []
-    knee_x_right = []
+    knee_x_left, knee_x_right = [], []
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -157,7 +163,6 @@ def analyze_video(video_path):
             r_hip = [lm[mp_pose.PoseLandmark.RIGHT_HIP.value].x, lm[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
             r_knee = [lm[mp_pose.PoseLandmark.RIGHT_KNEE.value].x, lm[mp_pose.PoseLandmark.RIGHT_KNEE.value].y]
             r_ankle = [lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].x, lm[mp_pose.PoseLandmark.RIGHT_ANKLE.value].y]
-
             angles_knee_left.append(calculate_angle(l_hip, l_knee, l_ankle))
             angles_knee_right.append(calculate_angle(r_hip, r_knee, r_ankle))
             angles_hip_left.append(calculate_angle(l_shoulder, l_hip, l_knee))
@@ -173,11 +178,8 @@ def analyze_video(video_path):
 
     reps = 0
     state = "up"
-    rep_depths = []
-    descent_speeds = []
-    time_in_hole = []
-    descent_start = None
-    bottom_start = None
+    rep_depths, descent_speeds, time_in_hole = [], [], []
+    descent_start = bottom_start = None
 
     for i, angle in enumerate(angles_knee_left):
         if state == "up" and angle < 90:
@@ -193,8 +195,7 @@ def analyze_video(video_path):
             if descent_start is not None and bottom_start is not None:
                 descent_speeds.append((bottom_start - descent_start) * 3 / fps)
                 time_in_hole.append((i - bottom_start) * 3 / fps)
-            descent_start = None
-            bottom_start = None
+            descent_start = bottom_start = None
 
     min_knee_left = round(float(np.min(angles_knee_left)), 1)
     min_knee_right = round(float(np.min(angles_knee_right)), 1)
@@ -220,19 +221,12 @@ def analyze_video(video_path):
     score = max(0, min(100, score))
 
     return {
-        "reps": reps,
-        "score": score,
-        "knee_min_left": min_knee_left,
-        "knee_min_right": min_knee_right,
-        "hip_avg_left": avg_hip_left,
-        "hip_avg_right": avg_hip_right,
-        "back_avg": avg_back,
-        "symmetry": symmetry,
-        "knee_stability_left": stab_left,
-        "knee_stability_right": stab_right,
-        "max_depth": max_depth,
-        "avg_descent_time": avg_descent_time,
-        "avg_time_in_hole": avg_time_in_hole,
+        "reps": reps, "score": score,
+        "knee_min_left": min_knee_left, "knee_min_right": min_knee_right,
+        "hip_avg_left": avg_hip_left, "hip_avg_right": avg_hip_right,
+        "back_avg": avg_back, "symmetry": symmetry,
+        "knee_stability_left": stab_left, "knee_stability_right": stab_right,
+        "max_depth": max_depth, "avg_descent_time": avg_descent_time, "avg_time_in_hole": avg_time_in_hole,
         "depth_interpretation": "Excellente profondeur" if min_knee_left < 70 else "Bonne profondeur" if min_knee_left < 90 else "Profondeur insuffisante",
         "back_interpretation": "Dos bien droit" if avg_back < 25 else "Légère inclinaison" if avg_back < 40 else "Trop penché en avant",
         "symmetry_interpretation": "Très bonne symétrie" if symmetry < 3 else "Symétrie correcte" if symmetry < 7 else "Asymétrie notable",
@@ -244,8 +238,7 @@ def build_video_table(video_data):
     hole = f"{video_data['avg_time_in_hole']}s" if video_data.get('avg_time_in_hole') else 'N/A'
     return (
         f"📊 **Analyse — Score {video_data.get('score', '?')}/100**\n\n"
-        f"| Métrique | Gauche | Droite |\n"
-        f"|----------|--------|--------|\n"
+        f"| Métrique | Gauche | Droite |\n|----------|--------|--------|\n"
         f"| Genou min | {video_data['knee_min_left']}° | {video_data['knee_min_right']}° |\n"
         f"| Hanche moy | {video_data['hip_avg_left']}° | {video_data['hip_avg_right']}° |\n"
         f"| Dos | {video_data['back_avg']}° | {video_data.get('back_interpretation', '')} |\n"
@@ -257,29 +250,20 @@ def build_video_table(video_data):
 
 def get_ai_response(messages_history, user_message, objectif, video_data=None, user_profile=None):
     content = user_message
-
     if video_data:
         content += f"""
-
-[Analyse vidéo complète]
-Score global : {video_data.get('score', '?')}/100
-Répétitions : {video_data['reps']}
-Genou gauche min : {video_data['knee_min_left']}° ({video_data.get('depth_interpretation', '')})
-Genou droit min : {video_data['knee_min_right']}°
-Hanche gauche moy : {video_data['hip_avg_left']}°
-Hanche droite moy : {video_data['hip_avg_right']}°
-Dos moy : {video_data['back_avg']}° ({video_data.get('back_interpretation', '')})
-Symétrie : {video_data['symmetry']}° ({video_data.get('symmetry_interpretation', '')})
-Stabilité genou G/D : {video_data['knee_stability_left']} / {video_data['knee_stability_right']}
-Vitesse descente : {video_data.get('avg_descent_time', 'N/A')}s ({video_data.get('speed_interpretation', '')})
-Temps en position basse : {video_data.get('avg_time_in_hole', 'N/A')}s
-Profondeur max : {video_data.get('max_depth', 'N/A')}°
+[Analyse vidéo]
+Score : {video_data.get('score')}/100 · Reps : {video_data['reps']}
+Genou G/D : {video_data['knee_min_left']}° / {video_data['knee_min_right']}° ({video_data.get('depth_interpretation')})
+Dos : {video_data['back_avg']}° ({video_data.get('back_interpretation')})
+Symétrie : {video_data['symmetry']}° ({video_data.get('symmetry_interpretation')})
+Vitesse descente : {video_data.get('avg_descent_time', 'N/A')}s ({video_data.get('speed_interpretation')})
+Temps en bas : {video_data.get('avg_time_in_hole', 'N/A')}s
 """
-
     profile_text = ""
     if user_profile:
         profile_text = f"""
-Profil de l'athlète :
+Profil :
 - Prénom : {user_profile.get('name', 'Non renseigné')}
 - Âge : {user_profile.get('age', 'Non renseigné')} ans
 - Poids : {user_profile.get('weight', 'Non renseigné')} kg
@@ -287,45 +271,24 @@ Profil de l'athlète :
 - Niveau : {user_profile.get('level', 'Non renseigné')}
 - Objectif : {user_profile.get('goal', 'Non renseigné')}
 - Squat : {user_profile.get('squat_weight', 'Non renseigné')} kg
-- Développé couché : {user_profile.get('bench_weight', 'Non renseigné')} kg
-- Soulevé de terre : {user_profile.get('deadlift_weight', 'Non renseigné')} kg
-- Séances/semaine : {user_profile.get('sessions_per_week', 'Non renseigné')}
+- Bench : {user_profile.get('bench_weight', 'Non renseigné')} kg
+- Deadlift : {user_profile.get('deadlift_weight', 'Non renseigné')} kg
 """
-
-    system_prompt = f"""Tu es un coach sportif IA nouvelle génération. Tu parles comme un vrai coach qui connaît son athlète, pas comme un robot.
-
+    system_prompt = f"""Tu es un coach sportif IA nouvelle génération.
 {profile_text}
+STYLE : Direct, motivant, tutoie toujours, emojis modérés (max 3), jamais plus de 200 mots sauf analyse vidéo.
 
-TON STYLE :
-- Direct, motivant, accessible
-- Phrases courtes et percutantes
-- Utilise des emojis avec modération (max 3-4 par réponse)
-- Tutoie toujours l'athlète
-- Utilise le prénom si disponible
-- Jamais plus de 200 mots sauf si analyse vidéo détaillée
+ANALYSE VIDÉO — structure obligatoire :
+**Ce que tu fais bien ✅** (1-2 points)
+**Ce qu'on améliore 🎯** (1-2 points avec correction)
+**Conseil prochaine séance 💡** (1 conseil actionnable)
+**Charge** : Augmenter/Maintenir/Réduire + pourquoi
 
-QUAND TU ANALYSES UNE VIDÉO, structure TOUJOURS comme ça :
-**Ce que tu fais bien ✅**
-(1-2 points max, sois précis)
-
-**Ce qu'on améliore 🎯**
-(1-2 points max, avec correction concrète)
-
-**Conseil pour la prochaine séance 💡**
-(1 conseil actionnable et précis)
-
-**Charge** : Augmenter / Maintenir / Réduire — et pourquoi en 1 phrase
-
-QUAND TU RÉPONDS À UNE QUESTION :
-- Réponse directe en 3-5 phrases max
-- Toujours terminer par un conseil actionnable
-
-Tu connais l'historique des échanges et tu t'en souviens.
+QUESTIONS : Réponse directe 3-5 phrases, terminer par conseil actionnable.
 Réponds toujours en français."""
 
     history = [{"role": m["role"], "content": m["content"]} for m in messages_history]
     history.append({"role": "user", "content": content})
-
     response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "system", "content": system_prompt}, *history],
@@ -371,12 +334,7 @@ async def get_messages(conv_id: int):
     return result
 
 @app.post("/conversations/{conv_id}/chat")
-async def chat(
-    conv_id: int,
-    message: str = Form(default=""),
-    file: Optional[UploadFile] = File(default=None),
-    user_profile: str = Form(default="")
-):
+async def chat(conv_id: int, message: str = Form(default=""), file: Optional[UploadFile] = File(default=None), user_profile: str = Form(default="")):
     db = DBSession()
     conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
     if not conv:
@@ -385,7 +343,6 @@ async def chat(
 
     video_data = None
     video_filename = None
-
     if file and file.filename:
         file_path = os.path.join(UPLOAD_DIR, file.filename)
         with open(file_path, "wb") as buffer:
@@ -395,7 +352,6 @@ async def chat(
 
     user_text = message if message else "Analyse cette vidéo et donne-moi des conseils détaillés"
 
-    # Profil depuis Flutter + données sauvegardées en base
     profile_dict = {}
     if user_profile:
         try:
@@ -403,7 +359,6 @@ async def chat(
         except:
             pass
 
-    # Enrichir avec les données sauvegardées
     saved_data = get_user_data(db)
     for k, v in saved_data.items():
         if k not in profile_dict or not profile_dict[k]:
@@ -417,12 +372,10 @@ async def chat(
     full_response = ai_response
     if video_data:
         full_response = build_video_table(video_data) + ai_response
-        # Sauvegarder le score squat
         set_user_data(db, "last_squat_score", str(video_data.get('score', '')))
         set_user_data(db, "last_squat_reps", str(video_data.get('reps', '')))
         set_user_data(db, "last_squat_date", datetime.now().strftime("%d/%m/%Y"))
 
-    # Extraire et sauvegarder les nouvelles infos du message
     extracted = extract_user_data_from_message(user_text, ai_response)
     for k, v in extracted.items():
         if v and str(v).strip() and str(v) != "None":
@@ -440,12 +393,7 @@ async def chat(
     db.commit()
     db.close()
 
-    return {
-        "response": full_response,
-        "video_data": video_data,
-        "video_filename": video_filename,
-        "updated_user_data": extracted,
-    }
+    return {"response": full_response, "video_data": video_data, "video_filename": video_filename, "updated_user_data": extracted}
 
 @app.get("/user-data/")
 async def get_all_user_data():
@@ -458,14 +406,13 @@ async def get_all_user_data():
 async def update_user_data(data: str = Form(...)):
     db = DBSession()
     try:
-            parsed = json.loads(data)
-            for k, v in parsed.items():
-                if v:
-                    set_user_data(db, k, str(v))
-            if 'weight' in parsed and parsed['weight']:
-                add_weight_history(db, parsed['weight'], datetime.now().strftime("%d/%m"))
-    except:
-            pass
+        parsed = json.loads(data)
+        for k, v in parsed.items():
+            set_user_data(db, k, str(v))
+        if 'weight' in parsed and parsed['weight']:
+            add_weight_history(db, parsed['weight'], datetime.now().strftime("%d/%m"))
+    except Exception as e:
+        print(f"Erreur update_user_data: {e}")
     db.close()
     return {"message": "updated"}
 
@@ -483,29 +430,33 @@ async def get_daily_message():
     last_score = user_data.get('last_squat_score', '')
     level = user_data.get('level', '')
 
-    profile_text = f"""
-Infos sur l'athlète :
-- Prénom : {name if name else 'Non renseigné'}
-- Poids : {weight if weight else 'Non renseigné'} kg
-- Squat : {squat if squat else 'Non renseigné'} kg
-- Streak : {streak if streak else 'Non renseigné'} jours
-- Objectif : {goal if goal else 'Non renseigné'}
-- Niveau : {level if level else 'Non renseigné'}
-- Dernier score squat : {last_score if last_score else 'Non renseigné'}/100
-"""
+    has_profile = any([name, weight, squat, goal, level])
 
-    prompt = f"""Tu es un coach sportif IA. Génère UNE SEULE phrase de motivation personnalisée pour cet athlète.
+    if has_profile:
+            prompt = f"""Tu es un coach sportif IA moderne, style TikTok fitness. Génère UNE phrase d'accroche percutante et variée pour cet athlète.
 
-{profile_text}
+    Profil :
+    - Prénom : {name or 'Non renseigné'}
+    - Poids : {weight or 'Non renseigné'} kg
+    - Squat : {squat or 'Non renseigné'} kg
+    - Streak : {streak or 'Non renseigné'} jours
+    - Objectif : {goal or 'Non renseigné'}
+    - Niveau : {level or 'Non renseigné'}
+    - Dernier score squat : {last_score or 'Non renseigné'}/100
 
-Règles STRICTES :
-- Maximum 12 mots
-- Utilise le prénom si disponible
-- Fais référence à une de ses stats si disponible
-- Tutoie toujours
-- 1 emoji maximum
-- Pas de guillemets
-- Juste la phrase, rien d'autre"""
+    Varie le style à chaque fois parmi :
+    - Question directe : "T'as vu tes progrès cette semaine {name} ?"
+    - Défi : "{name}, aujourd'hui on bat le record de squat."
+    - Référence aux stats : "Score {last_score}/100 la dernière fois. On fait mieux aujourd'hui."
+    - Motivation raw : "La prise de masse ça se passe maintenant {name}."
+    - Humour sportif : "{name} tes {weight}kg vont faire du bruit aujourd'hui."
+
+    Règles : max 15 mots, tutoie, 1 emoji max, pas de guillemets, juste la phrase, style direct et moderne."""
+    else:
+            prompt = """Tu es un coach sportif IA moderne style TikTok fitness. Génère UNE phrase de motivation sportive.
+
+    Varie le style : question, défi, motivation raw, humour sportif.
+    Règles : max 15 mots, tutoie, 1 emoji max, pas de guillemets, juste la phrase, style direct et moderne."""
 
     try:
         response = groq_client.chat.completions.create(
@@ -515,5 +466,6 @@ Règles STRICTES :
         )
         message = response.choices[0].message.content.strip()
         return {"message": message}
-    except:
-        return {"message": "Prêt à battre ton record aujourd'hui ? 🔥"}
+    except Exception as e:
+        print(f"Erreur Groq: {e}")
+        return {"message": "Allez, on donne tout aujourd'hui ! 💪"}

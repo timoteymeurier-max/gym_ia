@@ -64,9 +64,13 @@ class _RootPageState extends State<RootPage> {
   Future<void> loadUserData() async {
     try {
       final response = await http.get(Uri.parse('$kBaseUrl/user-data/'));
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      setState(() => userData = data.map((k, v) => MapEntry(k, v.toString())));
-    } catch (e) {}
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        setState(() => userData = data.map((k, v) => MapEntry(k, v.toString())));
+      }
+    } catch (e) {
+      setState(() => userData = {});
+    }
   }
 
   @override
@@ -187,22 +191,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _currentMessage = "";
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) _loadAIMessage();
-    });
+    _loadAIMessage();
   }
 
-  @override
-  void didUpdateWidget(HomePage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-  }
+    @override
+    void didUpdateWidget(HomePage oldWidget) {
+      super.didUpdateWidget(oldWidget);
+    }
 
   Future<void> _loadAIMessage() async {
     try {
-      final uri = Uri.parse('$kBaseUrl/daily-message/');
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final uri = Uri.parse('$kBaseUrl/daily-message/?t=$timestamp');
       final response = await http.get(uri, headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'Cache-Control': 'no-cache',
       });
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -286,7 +290,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
                 // PHRASE IA — centre absolu comme ChatGPT
                 _currentMessage.isEmpty
-                    ? const Center(child: CircularProgressIndicator(color: kOrange, strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(color: kOrange, strokeWidth: 1.5),
+                      )
                     : Text(
                         _currentMessage,
                         textAlign: TextAlign.center,
@@ -1395,7 +1402,15 @@ class _ProfilePageState extends State<ProfilePage> {
     await prefs.setString('height', _heightController.text);
     await prefs.setString('goal', _goalController.text);
     await prefs.setString('level', selectedLevel);
-    final data = {'name': _nameController.text, 'age': _ageController.text, 'weight': _weightController.text, 'height': _heightController.text, 'goal': _goalController.text, 'level': selectedLevel};
+
+    final data = {
+      'name': _nameController.text,
+      'age': _ageController.text,
+      'weight': _weightController.text,
+      'height': _heightController.text,
+      'goal': _goalController.text,
+      'level': selectedLevel,
+    };
     var request = http.MultipartRequest('PUT', Uri.parse('$kBaseUrl/user-data/'));
     request.fields['data'] = jsonEncode(data);
     await request.send();
