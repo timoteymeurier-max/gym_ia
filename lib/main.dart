@@ -20,6 +20,17 @@ const kText = Colors.white;
 const kTextDim = Color(0xFF888888);
 const String kBaseUrl = 'https://gym-ia-n9tf.onrender.com';
 
+// Génère un device_id unique par appareil
+Future<String> getDeviceId() async {
+  final prefs = await SharedPreferences.getInstance();
+  String? deviceId = prefs.getString('device_id');
+  if (deviceId == null) {
+    deviceId = 'device_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(999999)}';
+    await prefs.setString('device_id', deviceId);
+  }
+  return deviceId;
+}
+
 class Clickable extends StatelessWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -54,16 +65,27 @@ class RootPage extends StatefulWidget {
 class _RootPageState extends State<RootPage> {
   int _currentIndex = 0;
   Map<String, String> userData = {};
+  String deviceId = '';
 
   @override
   void initState() {
     super.initState();
+    _initDeviceId();
+  }
+
+  Future<void> _initDeviceId() async {
+    final id = await getDeviceId();
+    setState(() => deviceId = id);
     loadUserData();
   }
 
   Future<void> loadUserData() async {
+    if (deviceId.isEmpty) return;
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/user-data/'));
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/user-data/'),
+        headers: {'x-device-id': deviceId},
+      );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         setState(() => userData = data.map((k, v) => MapEntry(k, v.toString())));
@@ -75,14 +97,20 @@ class _RootPageState extends State<RootPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (deviceId.isEmpty) {
+      return const Scaffold(
+        backgroundColor: kBg,
+        body: Center(child: CircularProgressIndicator(color: kOrange)),
+      );
+    }
     return Scaffold(
       backgroundColor: kBg,
       extendBody: true,
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          HomePage(userData: userData, onUserDataChanged: loadUserData),
-          CoachPage(onMessageSent: loadUserData),
+          HomePage(userData: userData, onUserDataChanged: loadUserData, deviceId: deviceId),
+          CoachPage(onMessageSent: loadUserData, deviceId: deviceId),
           TrainingPage(userData: userData),
           NutritionPage(userData: userData),
           ProgressPage(userData: userData),
@@ -139,75 +167,27 @@ class _RootPageState extends State<RootPage> {
 class HomePage extends StatefulWidget {
   final Map<String, String> userData;
   final VoidCallback onUserDataChanged;
-  const HomePage({super.key, required this.userData, required this.onUserDataChanged});
+  final String deviceId;
+  const HomePage({super.key, required this.userData, required this.onUserDataChanged, required this.deviceId});
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final TextEditingController _chatController = TextEditingController();
-  late String _currentMessage;
+  String _currentMessage = "";
 
-  List<String> _getPersonalizedMessages() {
-    final name = widget.userData['name'] ?? '';
-    final squat = widget.userData['squat_weight'];
-    final weight = widget.userData['weight'];
-    final streak = widget.userData['streak'];
-    final goal = widget.userData['goal'] ?? '';
-    final lastScore = widget.userData['last_squat_score'];
-    final messages = <String>[];
-    if (name.isNotEmpty) messages.add("Hey $name 👋 Prêt à tout donner aujourd'hui ?");
-    if (squat != null && squat != '--') messages.add("Ton squat à ${squat}kg c'est solide. On vise plus ?");
-    if (lastScore != null && lastScore != '--') messages.add("Score $lastScore/100 à la dernière séance. On fait encore mieux ?");
-    if (streak != null && streak != '--') messages.add("$streak jours de streak 🔥 Tu es en feu. Lâche rien.");
-    if (weight != null && weight != '--') messages.add("À ${weight}kg, chaque séance compte. Allons-y.");
-    if (goal.isNotEmpty) messages.add("Objectif : $goal. Tu y es presque 💪");
-    messages.addAll([
-      "Prêt à battre ton record aujourd'hui ? 🔥",
-      "Ton objectif est proche. Continue comme ça.",
-      "On repart sur un push day aujourd'hui ?",
-      "Chaque rep te rapproche de ton objectif.",
-      "Le plus dur c'est de commencer. T'es déjà là 🚀",
-      "Une séance de plus et la semaine est parfaite ✅",
-    ]);
-    return messages;
-  }
-  Widget _pill(String text, IconData icon) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-    decoration: BoxDecoration(
-      color: kCard,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: kBorder),
-    ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 13, color: kOrange),
-      const SizedBox(width: 6),
-      Text(text, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6))),
-    ]),
-  );
-}
   @override
   void initState() {
     super.initState();
-    _currentMessage = "";
     _loadAIMessage();
   }
-
-    @override
-    void didUpdateWidget(HomePage oldWidget) {
-      super.didUpdateWidget(oldWidget);
-    }
 
   Future<void> _loadAIMessage() async {
     try {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final uri = Uri.parse('$kBaseUrl/daily-message/?t=$timestamp');
-      final response = await http.get(uri, headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Cache-Control': 'no-cache',
-      });
+      final response = await http.get(uri, headers: {'x-device-id': widget.deviceId});
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final msg = data['message']?.toString() ?? '';
@@ -215,9 +195,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           setState(() => _currentMessage = msg);
         }
       }
-    } catch (e) {
-      print('Erreur daily message: $e');
-    }
+    } catch (e) {}
   }
 
   @override
@@ -233,12 +211,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return level;
   }
 
+  Widget _pill(String text, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 13, color: kOrange),
+        const SizedBox(width: 6),
+        Text(text, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6))),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: _buildScrollContent(),
-    );
+    return SafeArea(bottom: false, child: _buildScrollContent());
   }
 
   Widget _buildScrollContent() {
@@ -262,14 +249,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     return CustomScrollView(
       slivers: [
-        // HERO PLEIN ÉCRAN — reste toujours là
         SliverToBoxAdapter(
           child: SizedBox(
             height: MediaQuery.of(context).size.height,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                // Profil icon en haut à droite
                 Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   Clickable(
                     onTap: () async {
@@ -278,36 +263,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         builder: (context) => Dialog(
                           backgroundColor: kBg,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          child: SizedBox(width: 500, height: 600, child: ProfilePage(userData: widget.userData)),
+                          child: SizedBox(width: 500, height: 600, child: ProfilePage(userData: widget.userData, deviceId: widget.deviceId)),
                         ),
                       );
                       widget.onUserDataChanged();
+                      _loadAIMessage();
                     },
                     child: Container(width: 36, height: 36, decoration: BoxDecoration(color: kCard2, shape: BoxShape.circle, border: Border.all(color: kBorder)), child: const Icon(Icons.person_rounded, color: kTextDim, size: 17)),
                   ),
                 ]),
                 const Spacer(),
-
-                // PHRASE IA — centre absolu comme ChatGPT
                 _currentMessage.isEmpty
-                    ? const SizedBox(
-                        width: 20, height: 20,
-                        child: CircularProgressIndicator(color: kOrange, strokeWidth: 1.5),
-                      )
-                    : Text(
-                        _currentMessage,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, height: 1.4, letterSpacing: -0.5),
-                      ),
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: kOrange, strokeWidth: 1.5))
+                    : Text(_currentMessage, textAlign: TextAlign.center, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, height: 1.4, letterSpacing: -0.5)),
                 const SizedBox(height: 32),
-
-                // BARRE DE SAISIE
                 Container(
-                  decoration: BoxDecoration(
-                    color: kCard,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: kBorder),
-                  ),
+                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
                   child: Row(children: [
                     Expanded(
                       child: TextField(
@@ -327,18 +298,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       padding: const EdgeInsets.only(right: 10),
                       child: Clickable(
                         onTap: () => _chatController.clear(),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(11)),
-                          child: const Icon(Icons.send_rounded, color: Colors.white, size: 16),
-                        ),
+                        child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 16)),
                       ),
                     ),
                   ]),
                 ),
                 const SizedBox(height: 16),
-
-                // SUGGESTIONS PILLS
                 Wrap(
                   spacing: 8, runSpacing: 8, alignment: WrapAlignment.center,
                   children: [
@@ -348,10 +313,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     _pill("Programme sur mesure", Icons.bolt_rounded),
                   ],
                 ),
-
                 const Spacer(),
-
-                // SCROLL HINT
                 Column(children: [
                   Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white.withOpacity(0.15), size: 22),
                   Text("Défiler pour voir tes stats", style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.15))),
@@ -361,8 +323,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
           ),
         ),
-
-        // WIDGETS EN DESSOUS
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
           sliver: SliverList(
@@ -378,7 +338,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
                     _compactStat("Taille", height.isNotEmpty ? "${height}cm" : '--', Icons.height_rounded, const Color(0xFF4CAF50)),
                     Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
-                    _compactStat("Âge", age.isNotEmpty ? "${age} ans" : '--', Icons.cake_rounded, Colors.purple),
+                    _compactStat("Âge", age.isNotEmpty ? "$age ans" : '--', Icons.cake_rounded, Colors.purple),
                     Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
                     _compactStat("Niveau", level.isNotEmpty ? _levelShort(level) : '--', Icons.star_rounded, Colors.amber),
                   ]),
@@ -532,7 +492,6 @@ class WeightChartPainter extends CustomPainter {
     }
     fillPath.lineTo(size.width, size.height);
     fillPath.close();
-
     canvas.drawPath(fillPath, fillPaint);
     canvas.drawPath(path, paint);
 
@@ -552,7 +511,8 @@ class WeightChartPainter extends CustomPainter {
 
 class CoachPage extends StatefulWidget {
   final VoidCallback onMessageSent;
-  const CoachPage({super.key, required this.onMessageSent});
+  final String deviceId;
+  const CoachPage({super.key, required this.onMessageSent, required this.deviceId});
   @override
   State<CoachPage> createState() => _CoachPageState();
 }
@@ -569,9 +529,11 @@ class _CoachPageState extends State<CoachPage> {
     loadConversations();
   }
 
+  Map<String, String> get _headers => {'x-device-id': widget.deviceId};
+
   Future<void> loadConversations() async {
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/conversations/'));
+      final response = await http.get(Uri.parse('$kBaseUrl/conversations/'), headers: _headers);
       final data = jsonDecode(response.body) as List;
       setState(() => conversations = data.map((e) => Map<String, dynamic>.from(e)).toList());
     } catch (e) {}
@@ -580,6 +542,7 @@ class _CoachPageState extends State<CoachPage> {
   Future<void> createNewConversation({String? suggestion}) async {
     try {
       var request = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/conversations/'));
+      request.headers.addAll(_headers);
       request.fields['objectif'] = 'general';
       request.fields['title'] = suggestion ?? 'Nouvelle conversation';
       var response = await request.send();
@@ -595,7 +558,7 @@ class _CoachPageState extends State<CoachPage> {
 
   Future<void> deleteConversation(int id) async {
     try {
-      await http.delete(Uri.parse('$kBaseUrl/conversations/$id'));
+      await http.delete(Uri.parse('$kBaseUrl/conversations/$id'), headers: _headers);
       setState(() {
         conversations.removeWhere((c) => c['id'] == id);
         if (activeConvId == id) activeConvId = null;
@@ -625,7 +588,7 @@ class _CoachPageState extends State<CoachPage> {
                 const SizedBox(width: 8),
                 const Text("Coach IA", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
                 const Spacer(),
-                MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: () => createNewConversation(), icon: const Icon(Icons.edit_outlined, color: kOrange, size: 18), tooltip: "Nouveau chat")),
+                MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: () => createNewConversation(), icon: const Icon(Icons.edit_outlined, color: kOrange, size: 18))),
               ]),
             ),
             Expanded(
@@ -634,6 +597,7 @@ class _CoachPageState extends State<CoachPage> {
                   : ChatView(
                       key: ValueKey(activeConvId),
                       convId: activeConvId!,
+                      deviceId: widget.deviceId,
                       initialMessage: _pendingSuggestion,
                       onTitleUpdate: (title) {
                         setState(() {
@@ -744,7 +708,6 @@ class _CoachPageState extends State<CoachPage> {
           ),
         ),
       ),
-      // BARRE D'ÉCRITURE SUR LA PAGE WELCOME
       Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 90),
         decoration: BoxDecoration(color: const Color(0xFF111111), border: Border(top: BorderSide(color: kBorder))),
@@ -761,19 +724,13 @@ class _CoachPageState extends State<CoachPage> {
                 focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-              onSubmitted: (val) {
-                if (val.trim().isNotEmpty) createNewConversation(suggestion: val.trim());
-              },
+              onSubmitted: (val) { if (val.trim().isNotEmpty) createNewConversation(suggestion: val.trim()); },
             ),
           ),
           const SizedBox(width: 8),
           Clickable(
             onTap: () => createNewConversation(),
-            child: Container(
-              padding: const EdgeInsets.all(11),
-              decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 17),
-            ),
+            child: Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 17)),
           ),
         ]),
       ),
@@ -1122,7 +1079,8 @@ class ChatView extends StatefulWidget {
   final Function(String) onTitleUpdate;
   final VoidCallback onMessageSent;
   final String? initialMessage;
-  const ChatView({super.key, required this.convId, required this.onTitleUpdate, required this.onMessageSent, this.initialMessage});
+  final String deviceId;
+  const ChatView({super.key, required this.convId, required this.onTitleUpdate, required this.onMessageSent, this.initialMessage, required this.deviceId});
   @override
   State<ChatView> createState() => _ChatViewState();
 }
@@ -1134,6 +1092,8 @@ class _ChatViewState extends State<ChatView> {
   bool isLoading = false;
   Uint8List? pendingVideoBytes;
   String? pendingVideoName;
+
+  Map<String, String> get _headers => {'x-device-id': widget.deviceId};
 
   @override
   void initState() {
@@ -1148,7 +1108,7 @@ class _ChatViewState extends State<ChatView> {
 
   Future<void> loadMessages() async {
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/conversations/${widget.convId}/messages'));
+      final response = await http.get(Uri.parse('$kBaseUrl/conversations/${widget.convId}/messages'), headers: _headers);
       final data = jsonDecode(response.body) as List;
       setState(() => messages = data.map((e) => Map<String, dynamic>.from(e)).toList());
       _scrollToBottom();
@@ -1179,6 +1139,7 @@ class _ChatViewState extends State<ChatView> {
 
     try {
       var request = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/conversations/${widget.convId}/chat'));
+      request.headers.addAll(_headers);
       request.fields['message'] = text.isNotEmpty ? text : "Analyse cette vidéo et donne-moi des conseils détaillés";
       final prefs = await SharedPreferences.getInstance();
       final profile = {
@@ -1324,13 +1285,12 @@ class _ChatViewState extends State<ChatView> {
               ]),
             ),
           Row(children: [
-            MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_rounded, color: kOrange, size: 20), tooltip: "Envoyer une vidéo")),
+            MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_rounded, color: kOrange, size: 20))),
             Expanded(
               child: TextField(
                 controller: _controller,
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 maxLines: 5, minLines: 1,
-                keyboardType: TextInputType.text,
                 decoration: InputDecoration(
                   hintText: "Pose une question à ton coach...",
                   hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
@@ -1363,7 +1323,8 @@ class _ChatViewState extends State<ChatView> {
 
 class ProfilePage extends StatefulWidget {
   final Map<String, String> userData;
-  const ProfilePage({super.key, required this.userData});
+  final String deviceId;
+  const ProfilePage({super.key, required this.userData, required this.deviceId});
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
@@ -1391,7 +1352,7 @@ class _ProfilePageState extends State<ProfilePage> {
     _weightController.text = widget.userData['weight'] ?? '';
     _heightController.text = widget.userData['height'] ?? '';
     _goalController.text = widget.userData['goal'] ?? '';
-    selectedLevel = widget.userData['level'] ?? 'debutant';
+    selectedLevel = widget.userData['level']?.isNotEmpty == true ? widget.userData['level']! : 'debutant';
   }
 
   Future<void> saveProfile() async {
@@ -1412,6 +1373,7 @@ class _ProfilePageState extends State<ProfilePage> {
       'level': selectedLevel,
     };
     var request = http.MultipartRequest('PUT', Uri.parse('$kBaseUrl/user-data/'));
+    request.headers['x-device-id'] = widget.deviceId;
     request.fields['data'] = jsonEncode(data);
     await request.send();
     setState(() => saved = true);

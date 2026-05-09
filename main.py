@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey
@@ -39,6 +39,7 @@ Base = declarative_base()
 class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True)
+    device_id = Column(String, default="default")
     title = Column(String, default="Nouvelle conversation")
     objectif = Column(String, default="general")
     created_at = Column(DateTime, default=datetime.now)
@@ -58,21 +59,21 @@ class Message(Base):
 class UserData(Base):
     __tablename__ = "user_data"
     id = Column(Integer, primary_key=True)
-    key = Column(String, unique=True)
+    device_id = Column(String, default="default")
+    key = Column(String)
     value = Column(Text)
     updated_at = Column(DateTime, default=datetime.now)
 
 Base.metadata.create_all(engine)
 DBSession = sessionmaker(bind=engine)
 
-def get_user_data(db):
-    rows = db.query(UserData).all()
+def get_user_data(db, device_id="default"):
+    rows = db.query(UserData).filter(UserData.device_id == device_id).all()
     return {r.key: r.value for r in rows}
 
-def set_user_data(db, key, value):
-    row = db.query(UserData).filter(UserData.key == key).first()
+def set_user_data(db, device_id, key, value):
+    row = db.query(UserData).filter(UserData.device_id == device_id, UserData.key == key).first()
     if str(value).strip() == '':
-        # Supprimer la clé si valeur vide
         if row:
             db.delete(row)
             db.commit()
@@ -81,11 +82,11 @@ def set_user_data(db, key, value):
             row.value = str(value)
             row.updated_at = datetime.now()
         else:
-            db.add(UserData(key=key, value=str(value)))
+            db.add(UserData(device_id=device_id, key=key, value=str(value)))
         db.commit()
 
-def add_weight_history(db, weight, date):
-    row = db.query(UserData).filter(UserData.key == "weight_history").first()
+def add_weight_history(db, device_id, weight, date):
+    row = db.query(UserData).filter(UserData.device_id == device_id, UserData.key == "weight_history").first()
     if row:
         try:
             history = json.loads(row.value)
@@ -95,22 +96,20 @@ def add_weight_history(db, weight, date):
         history = []
     history.append({"date": date, "weight": float(weight)})
     history = history[-30:]
-    set_user_data(db, "weight_history", json.dumps(history))
+    set_user_data(db, device_id, "weight_history", json.dumps(history))
 
 def extract_user_data_from_message(message, ai_response):
-    prompt = f"""Analyse ce message d'un utilisateur et la réponse du coach.
-Extrait UNIQUEMENT les informations factuelles importantes sur l'utilisateur.
+    prompt = f"""Analyse ce message et la réponse du coach.
+Extrait UNIQUEMENT les infos factuelles sur l'utilisateur.
 
-Message utilisateur: {message}
-Réponse coach: {ai_response}
+Message: {message}
+Réponse: {ai_response}
 
 Retourne UNIQUEMENT un JSON valide avec les clés pertinentes parmi :
-- name, age, weight, height, goal, level
-- squat_weight, bench_weight, deadlift_weight
-- sessions_per_week, streak, calories
+name, age, weight, height, goal, level, squat_weight, bench_weight, deadlift_weight, sessions_per_week, streak, calories
 
-Si aucune info n'est trouvée retourne {{}}.
-Ne retourne QUE le JSON, sans explication."""
+Si aucune info retourne {{}}.
+Ne retourne QUE le JSON."""
     try:
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -124,9 +123,7 @@ Ne retourne QUE le JSON, sans explication."""
         return {}
 
 def calculate_angle(a, b, c):
-    a = np.array(a)
-    b = np.array(b)
-    c = np.array(c)
+    a, b, c = np.array(a), np.array(b), np.array(c)
     radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
     angle = np.abs(radians * 180.0 / np.pi)
     if angle > 180.0:
@@ -257,7 +254,7 @@ Score : {video_data.get('score')}/100 · Reps : {video_data['reps']}
 Genou G/D : {video_data['knee_min_left']}° / {video_data['knee_min_right']}° ({video_data.get('depth_interpretation')})
 Dos : {video_data['back_avg']}° ({video_data.get('back_interpretation')})
 Symétrie : {video_data['symmetry']}° ({video_data.get('symmetry_interpretation')})
-Vitesse descente : {video_data.get('avg_descent_time', 'N/A')}s ({video_data.get('speed_interpretation')})
+Vitesse : {video_data.get('avg_descent_time', 'N/A')}s ({video_data.get('speed_interpretation')})
 Temps en bas : {video_data.get('avg_time_in_hole', 'N/A')}s
 """
     profile_text = ""
@@ -297,9 +294,13 @@ Réponds toujours en français."""
     return response.choices[0].message.content
 
 @app.post("/conversations/")
-async def create_conversation(objectif: str = Form(default="general"), title: str = Form(default="Nouvelle conversation")):
+async def create_conversation(
+    objectif: str = Form(default="general"),
+    title: str = Form(default="Nouvelle conversation"),
+    x_device_id: str = Header(default="default")
+):
     db = DBSession()
-    conv = Conversation(title=title, objectif=objectif)
+    conv = Conversation(title=title, objectif=objectif, device_id=x_device_id)
     db.add(conv)
     db.commit()
     db.refresh(conv)
@@ -308,17 +309,17 @@ async def create_conversation(objectif: str = Form(default="general"), title: st
     return result
 
 @app.get("/conversations/")
-async def get_conversations():
+async def get_conversations(x_device_id: str = Header(default="default")):
     db = DBSession()
-    convs = db.query(Conversation).order_by(Conversation.updated_at.desc()).all()
+    convs = db.query(Conversation).filter(Conversation.device_id == x_device_id).order_by(Conversation.updated_at.desc()).all()
     result = [{"id": c.id, "title": c.title, "objectif": c.objectif, "updated_at": c.updated_at.strftime("%d/%m/%Y %H:%M")} for c in convs]
     db.close()
     return result
 
 @app.delete("/conversations/{conv_id}")
-async def delete_conversation(conv_id: int):
+async def delete_conversation(conv_id: int, x_device_id: str = Header(default="default")):
     db = DBSession()
-    conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+    conv = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.device_id == x_device_id).first()
     if conv:
         db.delete(conv)
         db.commit()
@@ -326,7 +327,7 @@ async def delete_conversation(conv_id: int):
     return {"message": "deleted"}
 
 @app.get("/conversations/{conv_id}/messages")
-async def get_messages(conv_id: int):
+async def get_messages(conv_id: int, x_device_id: str = Header(default="default")):
     db = DBSession()
     messages = db.query(Message).filter(Message.conversation_id == conv_id).order_by(Message.created_at).all()
     result = [{"role": m.role, "content": m.content, "video_filename": m.video_filename} for m in messages]
@@ -334,9 +335,15 @@ async def get_messages(conv_id: int):
     return result
 
 @app.post("/conversations/{conv_id}/chat")
-async def chat(conv_id: int, message: str = Form(default=""), file: Optional[UploadFile] = File(default=None), user_profile: str = Form(default="")):
+async def chat(
+    conv_id: int,
+    message: str = Form(default=""),
+    file: Optional[UploadFile] = File(default=None),
+    user_profile: str = Form(default=""),
+    x_device_id: str = Header(default="default")
+):
     db = DBSession()
-    conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+    conv = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.device_id == x_device_id).first()
     if not conv:
         db.close()
         return {"error": "Conversation introuvable"}
@@ -359,7 +366,7 @@ async def chat(conv_id: int, message: str = Form(default=""), file: Optional[Upl
         except:
             pass
 
-    saved_data = get_user_data(db)
+    saved_data = get_user_data(db, x_device_id)
     for k, v in saved_data.items():
         if k not in profile_dict or not profile_dict[k]:
             profile_dict[k] = v
@@ -372,14 +379,14 @@ async def chat(conv_id: int, message: str = Form(default=""), file: Optional[Upl
     full_response = ai_response
     if video_data:
         full_response = build_video_table(video_data) + ai_response
-        set_user_data(db, "last_squat_score", str(video_data.get('score', '')))
-        set_user_data(db, "last_squat_reps", str(video_data.get('reps', '')))
-        set_user_data(db, "last_squat_date", datetime.now().strftime("%d/%m/%Y"))
+        set_user_data(db, x_device_id, "last_squat_score", str(video_data.get('score', '')))
+        set_user_data(db, x_device_id, "last_squat_reps", str(video_data.get('reps', '')))
+        set_user_data(db, x_device_id, "last_squat_date", datetime.now().strftime("%d/%m/%Y"))
 
     extracted = extract_user_data_from_message(user_text, ai_response)
     for k, v in extracted.items():
         if v and str(v).strip() and str(v) != "None":
-            set_user_data(db, k, str(v))
+            set_user_data(db, x_device_id, k, str(v))
 
     user_msg = Message(conversation_id=conv_id, role="user", content=user_text, video_filename=video_filename)
     assistant_msg = Message(conversation_id=conv_id, role="assistant", content=full_response)
@@ -396,30 +403,30 @@ async def chat(conv_id: int, message: str = Form(default=""), file: Optional[Upl
     return {"response": full_response, "video_data": video_data, "video_filename": video_filename, "updated_user_data": extracted}
 
 @app.get("/user-data/")
-async def get_all_user_data():
+async def get_all_user_data(x_device_id: str = Header(default="default")):
     db = DBSession()
-    data = get_user_data(db)
+    data = get_user_data(db, x_device_id)
     db.close()
     return data
 
 @app.put("/user-data/")
-async def update_user_data(data: str = Form(...)):
+async def update_user_data(data: str = Form(...), x_device_id: str = Header(default="default")):
     db = DBSession()
     try:
         parsed = json.loads(data)
         for k, v in parsed.items():
-            set_user_data(db, k, str(v))
+            set_user_data(db, x_device_id, k, str(v))
         if 'weight' in parsed and parsed['weight']:
-            add_weight_history(db, parsed['weight'], datetime.now().strftime("%d/%m"))
+            add_weight_history(db, x_device_id, parsed['weight'], datetime.now().strftime("%d/%m"))
     except Exception as e:
         print(f"Erreur update_user_data: {e}")
     db.close()
     return {"message": "updated"}
 
 @app.get("/daily-message/")
-async def get_daily_message():
+async def get_daily_message(x_device_id: str = Header(default="default")):
     db = DBSession()
-    user_data = get_user_data(db)
+    user_data = get_user_data(db, x_device_id)
     db.close()
 
     name = user_data.get('name', '')
@@ -430,33 +437,26 @@ async def get_daily_message():
     last_score = user_data.get('last_squat_score', '')
     level = user_data.get('level', '')
 
-    has_profile = any([name, weight, squat, goal, level])
+    has_profile = any([name, weight, squat, goal])
 
     if has_profile:
-            prompt = f"""Tu es un coach sportif IA moderne, style TikTok fitness. Génère UNE phrase d'accroche percutante et variée pour cet athlète.
+        prompt = f"""Tu es un coach sportif IA moderne style TikTok fitness. Génère UNE phrase d'accroche percutante pour cet athlète.
 
-    Profil :
-    - Prénom : {name or 'Non renseigné'}
-    - Poids : {weight or 'Non renseigné'} kg
-    - Squat : {squat or 'Non renseigné'} kg
-    - Streak : {streak or 'Non renseigné'} jours
-    - Objectif : {goal or 'Non renseigné'}
-    - Niveau : {level or 'Non renseigné'}
-    - Dernier score squat : {last_score or 'Non renseigné'}/100
+Profil :
+- Prénom : {name or 'Non renseigné'}
+- Poids : {weight or 'Non renseigné'} kg
+- Squat : {squat or 'Non renseigné'} kg
+- Streak : {streak or 'Non renseigné'} jours
+- Objectif : {goal or 'Non renseigné'}
+- Niveau : {level or 'Non renseigné'}
+- Dernier score : {last_score or 'Non renseigné'}/100
 
-    Varie le style à chaque fois parmi :
-    - Question directe : "T'as vu tes progrès cette semaine {name} ?"
-    - Défi : "{name}, aujourd'hui on bat le record de squat."
-    - Référence aux stats : "Score {last_score}/100 la dernière fois. On fait mieux aujourd'hui."
-    - Motivation raw : "La prise de masse ça se passe maintenant {name}."
-    - Humour sportif : "{name} tes {weight}kg vont faire du bruit aujourd'hui."
-
-    Règles : max 15 mots, tutoie, 1 emoji max, pas de guillemets, juste la phrase, style direct et moderne."""
+Varie le style : question directe, défi, référence aux stats, motivation raw, humour sportif.
+Règles : max 15 mots, utilise le prénom, tutoie, 1 emoji max, pas de guillemets, juste la phrase."""
     else:
-            prompt = """Tu es un coach sportif IA moderne style TikTok fitness. Génère UNE phrase de motivation sportive.
-
-    Varie le style : question, défi, motivation raw, humour sportif.
-    Règles : max 15 mots, tutoie, 1 emoji max, pas de guillemets, juste la phrase, style direct et moderne."""
+        prompt = """Tu es un coach sportif IA moderne style TikTok fitness. Génère UNE phrase de motivation sportive générale.
+Varie le style : question, défi, motivation raw, humour sportif.
+Règles : max 15 mots, tutoie, 1 emoji max, pas de guillemets, juste la phrase."""
 
     try:
         response = groq_client.chat.completions.create(
