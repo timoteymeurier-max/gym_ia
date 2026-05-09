@@ -80,6 +80,12 @@ with engine.connect() as conn:
     if 'device_id' not in cols_conversations:
         conn.execute(text("ALTER TABLE conversations ADD COLUMN device_id VARCHAR DEFAULT 'default'"))
         conn.commit()
+    # Supprimer l'ancienne contrainte unique sur key seul
+    try:
+        conn.execute(text("ALTER TABLE user_data DROP CONSTRAINT IF EXISTS user_data_key_key"))
+        conn.commit()
+    except:
+        pass
 
 def get_user_data(db, device_id="default"):
     rows = db.query(UserData).filter(UserData.device_id == device_id).all()

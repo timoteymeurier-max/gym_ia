@@ -77,16 +77,11 @@ class _RootPageState extends State<RootPage> {
   }
 
   Future<void> _init() async {
-    // Étape 1 : générer device_id
     final id = await getDeviceId();
     if (!mounted) return;
     setState(() => deviceId = id);
-
-    // Étape 2 : charger user-data (réveille Render au passage)
-    await loadUserData();
-
-    // Étape 3 : charger le message IA (Render est maintenant réveillé)
-    await _loadDailyMessage();
+    await loadUserData();       // 1. charge le profil
+    await _loadDailyMessage();  // 2. génère la phrase avec le profil
   }
 
   Future<void> loadUserData() async {
@@ -123,7 +118,6 @@ class _RootPageState extends State<RootPage> {
 
   Future<void> refreshAll() async {
     await loadUserData();
-    await _loadDailyMessage();
   }
 
   @override
@@ -280,7 +274,7 @@ class _HomePageState extends State<HomePage> {
                           child: SizedBox(width: 500, height: 600, child: ProfilePage(userData: widget.userData, deviceId: widget.deviceId)),
                         ),
                       );
-                      widget.onUserDataChanged();
+                      widget.onUserDataChanged(); // Recharge userData SANS recharger le message
                     },
                     child: Container(width: 36, height: 36, decoration: BoxDecoration(color: kCard2, shape: BoxShape.circle, border: Border.all(color: kBorder)), child: const Icon(Icons.person_rounded, color: kTextDim, size: 17)),
                   ),
