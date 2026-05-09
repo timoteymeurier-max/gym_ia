@@ -30,7 +30,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-engine = create_engine("sqlite:///sessions.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///sessions.db")
+engine = create_engine(DATABASE_URL)
 Base = declarative_base()
 
 class Conversation(Base):

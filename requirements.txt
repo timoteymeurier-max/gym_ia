@@ -6,3 +6,4 @@ mediapipe==0.10.33
 groq
 sqlalchemy
 python-dotenv
+psycopg2-binary
