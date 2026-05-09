@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from dotenv import load_dotenv
@@ -33,14 +34,7 @@ groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///sessions.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=2,
-    max_overflow=3,
-    pool_timeout=30,
-    pool_pre_ping=True,
-    pool_recycle=300,
-)
+engine = create_engine(DATABASE_URL, poolclass=NullPool)
 Base = declarative_base()
 
 class Conversation(Base):
