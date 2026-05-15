@@ -166,7 +166,7 @@ Réponse à analyser:
         detection = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": detection_prompt}],
-            max_tokens=150,
+            max_tokens=4000,
         )
         text = detection.choices[0].message.content.strip()
         text = text.replace("```json", "").replace("```", "").strip()
@@ -446,7 +446,7 @@ Réponds toujours en français."""
     response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "system", "content": system_prompt}, *history],
-        max_tokens=1500,
+        max_tokens=4000,
     )
     return response.choices[0].message.content
 

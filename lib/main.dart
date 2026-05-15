@@ -29,7 +29,7 @@ const kBlue = Color(0xFF60A5FA);
 const kPurple = Color(0xFFA78BFA);
 const kYellow = Color(0xFFFBBF24);
 const kRed = Color(0xFFF87171);
-const String kBaseUrl = 'http://localhost:8000';
+const String kBaseUrl = 'https://gym-ia-n9tf.onrender.com';
 
 // ===================== MOCK DATA =====================
 final mockExercises = [
