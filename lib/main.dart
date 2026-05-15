@@ -1668,6 +1668,72 @@ class _AIProgramsPageState extends State<AIProgramsPage> {
   }
 }
 
+
+Map<String, dynamic> _parseTrainingProgram(String text) {
+  final days = <Map<String, dynamic>>[];
+  final dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche', 'jour 1', 'jour 2', 'jour 3', 'jour 4', 'jour 5', 'jour 6', 'jour 7', 'day 1', 'day 2', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7'];
+  
+  final lines = text.split('\n');
+  Map<String, dynamic>? currentDay;
+  List<Map<String, dynamic>> currentExercises = [];
+
+  for (final line in lines) {
+    final lower = line.toLowerCase().trim();
+    
+    // Détecter un nouveau jour
+    final dayMatch = dayNames.firstWhere(
+      (d) => lower.contains(d),
+      orElse: () => '',
+    );
+    
+    if (dayMatch.isNotEmpty && (lower.startsWith(dayMatch) || lower.contains('**$dayMatch') || lower.contains('## $dayMatch') || lower.contains('# $dayMatch') || RegExp(r'^[*#\s]*' + dayMatch).hasMatch(lower))) {
+      if (currentDay != null) {
+        currentDay['exercises'] = List.from(currentExercises);
+        days.add(currentDay);
+      }
+      // Extraire le label (ex: Push, Pull, Legs)
+      String label = '';
+      final labelMatch = RegExp(r'[-–:]\s*(.+)$').firstMatch(line);
+      if (labelMatch != null) label = labelMatch.group(1)?.trim() ?? '';
+      
+      currentDay = {'day': _capitalizeDay(dayMatch), 'label': label};
+      currentExercises = [];
+      continue;
+    }
+
+    // Détecter un exercice
+    if (currentDay != null) {
+      final exMatch = RegExp(r'[-•*]\s*(.+?)(?:\s*[:\-]\s*|\s+)(\d+)\s*[xX×]\s*(\d+[-–]?\d*)', caseSensitive: false).firstMatch(line);
+      if (exMatch != null) {
+        currentExercises.add({
+          'name': exMatch.group(1)?.trim() ?? line.trim(),
+          'sets': exMatch.group(2) ?? '3',
+          'reps': exMatch.group(3) ?? '8-12',
+          'rest': '60-90s',
+        });
+      } else if (line.trim().isNotEmpty && (line.trim().startsWith('-') || line.trim().startsWith('•') || line.trim().startsWith('*'))) {
+        final name = line.trim().replaceAll(RegExp(r'^[-•*]\s*'), '');
+        if (name.isNotEmpty && name.length > 3) {
+          currentExercises.add({'name': name, 'sets': '3', 'reps': '8-12', 'rest': '60s'});
+        }
+      }
+    }
+  }
+
+  if (currentDay != null) {
+    currentDay['exercises'] = List.from(currentExercises);
+    days.add(currentDay);
+  }
+
+  return {'days': days, 'tips': []};
+}
+
+String _capitalizeDay(String day) {
+  if (day.isEmpty) return day;
+  return day[0].toUpperCase() + day.substring(1);
+}
+
+
 // ===================== AI PROGRAM DETAIL PAGE =====================
 class AIProgramDetailPage extends StatelessWidget {
   final Map<String, dynamic> program;
@@ -1675,9 +1741,16 @@ class AIProgramDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Map<String, dynamic> structured = {};
+  Map<String, dynamic> structured = {};
+    String rawText = '';
     try {
-      structured = jsonDecode(program['content'] ?? '{}');
+      final decoded = jsonDecode(program['content'] ?? '{}');
+      if (decoded['raw'] != null) {
+        rawText = decoded['raw'] as String;
+        structured = _parseTrainingProgram(rawText);
+      } else {
+        structured = decoded;
+      }
     } catch (_) {}
 
     final days = (structured['days'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList();
@@ -2124,6 +2197,75 @@ class _AINutritionPageState extends State<AINutritionPage> {
     );
   }
 }
+
+
+Map<String, dynamic> _parseNutritionPlan(String text) {
+  final days = <Map<String, dynamic>>[];
+  final dayNames = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche', 'jour 1', 'jour 2', 'jour 3', 'jour 4', 'jour 5', 'jour 6', 'jour 7'];
+  final mealNames = ['petit déjeuner', 'déjeuner', 'dîner', 'collation', 'snack', 'goûter'];
+
+  final lines = text.split('\n');
+  Map<String, dynamic>? currentDay;
+  Map<String, dynamic>? currentMeal;
+  List<Map<String, dynamic>> currentMeals = [];
+  List<String> currentFoods = [];
+
+  void saveMeal() {
+    if (currentMeal != null) {
+      currentMeal!['foods'] = List.from(currentFoods);
+      currentMeals.add(currentMeal!);
+      currentMeal = null;
+      currentFoods = [];
+    }
+  }
+
+  void saveDay() {
+    saveMeal();
+    if (currentDay != null) {
+      currentDay!['meals'] = List.from(currentMeals);
+      days.add(currentDay!);
+      currentDay = null;
+      currentMeals = [];
+    }
+  }
+
+  for (final line in lines) {
+    final lower = line.toLowerCase().trim();
+
+    // Détecter un nouveau jour
+    final dayMatch = dayNames.firstWhere((d) => lower.contains(d), orElse: () => '');
+    if (dayMatch.isNotEmpty && (lower.startsWith(dayMatch) || RegExp(r'^[*#\s]*' + dayMatch).hasMatch(lower))) {
+      saveDay();
+      currentDay = {'day': dayMatch[0].toUpperCase() + dayMatch.substring(1), 'total_calories': 0, 'total_protein': 0};
+      continue;
+    }
+
+    // Détecter un repas
+    final mealMatch = mealNames.firstWhere((m) => lower.contains(m), orElse: () => '');
+    if (mealMatch.isNotEmpty && currentDay != null) {
+      saveMeal();
+      // Extraire calories et protéines
+      int cal = 0; int prot = 0;
+      final calMatch = RegExp(r'(\d+)\s*cal').firstMatch(lower);
+      final protMatch = RegExp(r'(\d+)g?\s*(?:de\s*)?prot').firstMatch(lower);
+      if (calMatch != null) cal = int.tryParse(calMatch.group(1) ?? '0') ?? 0;
+      if (protMatch != null) prot = int.tryParse(protMatch.group(1) ?? '0') ?? 0;
+      currentMeal = {'name': mealMatch[0].toUpperCase() + mealMatch.substring(1), 'calories': cal, 'protein': prot};
+      continue;
+    }
+
+    // Ajouter un aliment
+    if (currentMeal != null && line.trim().isNotEmpty) {
+      final food = line.trim().replaceAll(RegExp(r'^[-•*]\s*'), '');
+      if (food.isNotEmpty && food.length > 2) currentFoods.add(food);
+    }
+  }
+  saveDay();
+
+  return {'days': days, 'tips': []};
+}
+
+
 
 // ===================== AI NUTRITION DETAIL PAGE =====================
 class AINutritionDetailPage extends StatelessWidget {

@@ -173,67 +173,22 @@ Réponse à analyser:
         data = json.loads(text)
 
         if data.get("is_training_program"):
-            structure_prompt = f"""Tu es un assistant qui structure des programmes d'entraînement.
-Prends ce programme et retourne UNIQUEMENT un JSON structuré comme ceci :
-{{
-  "days": [
-    {{
-      "day": "Lundi",
-      "label": "Push",
-      "exercises": [
-        {{"name": "Développé couché", "sets": "4", "reps": "8-10", "rest": "90s"}}
-      ]
-    }}
-  ],
-  "tips": ["Conseil 1", "Conseil 2"]
-}}
-
-Ne retourne QUE le JSON.
-Programme à structurer:
-{ai_response[:1500]}"""
-
-            structure_resp = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": structure_prompt}],
-                max_tokens=2000,
-            )
-            structured = structure_resp.choices[0].message.content.strip()
-            structured = structured.replace("```json", "").replace("```", "").strip()
-            json.loads(structured)
-            db.add(AIProgram(device_id=device_id, title=data.get("title", "Programme IA"), objective=data.get("objective", "Général"), content=structured))
+            db.add(AIProgram(
+                device_id=device_id,
+                title=data.get("title", "Programme IA"),
+                objective=data.get("objective", "Général"),
+                content=json.dumps({"raw": ai_response}),
+            ))
             db.commit()
             print(f"Programme entraînement sauvegardé: {data.get('title')}")
 
         if data.get("is_nutrition_plan"):
-            structure_prompt = f"""Tu es un assistant qui structure des plans nutritionnels.
-Prends ce plan et retourne UNIQUEMENT un JSON structuré comme ceci :
-{{
-  "days": [
-    {{
-      "day": "Lundi",
-      "meals": [
-        {{"name": "Petit déjeuner", "foods": ["Omelette 3 œufs", "Flocons d'avoine 80g"], "calories": 520, "protein": 38}}
-      ],
-      "total_calories": 2400,
-      "total_protein": 180
-    }}
-  ],
-  "tips": ["Conseil 1", "Conseil 2"]
-}}
-
-Ne retourne QUE le JSON.
-Plan à structurer:
-{ai_response[:1500]}"""
-
-            structure_resp = groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": structure_prompt}],
-                max_tokens=2000,
-            )
-            structured = structure_resp.choices[0].message.content.strip()
-            structured = structured.replace("```json", "").replace("```", "").strip()
-            json.loads(structured)
-            db.add(AINutritionPlan(device_id=device_id, title=data.get("title", "Plan nutrition IA"), objective=data.get("objective", "Général"), content=structured))
+            db.add(AINutritionPlan(
+                device_id=device_id,
+                title=data.get("title", "Plan nutrition IA"),
+                objective=data.get("objective", "Général"),
+                content=json.dumps({"raw": ai_response}),
+            ))
             db.commit()
             print(f"Plan nutrition sauvegardé: {data.get('title')}")
 
@@ -446,7 +401,7 @@ Réponds toujours en français."""
     response = groq_client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "system", "content": system_prompt}, *history],
-        max_tokens=4000,
+        max_tokens=8000,
     )
     return response.choices[0].message.content
 
