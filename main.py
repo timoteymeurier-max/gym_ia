@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Float
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -635,7 +635,7 @@ async def delete_ai_nutrition_plan(plan_id: int, x_device_id: str = Header(defau
     db.close()
     return {"message": "deleted"}
 
-    @app.get("/exercise-perfs/")
+@app.get("/exercise-perfs/")
 async def get_exercise_perfs(exercise: str = "", x_device_id: str = Header(default="default")):
     db = DBSession()
     query = db.query(ExercisePerf).filter(ExercisePerf.device_id == x_device_id)
