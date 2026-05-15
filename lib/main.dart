@@ -12,15 +12,59 @@ void main() {
   runApp(const MyApp());
 }
 
+// ===================== THEME =====================
 const kOrange = Color(0xFFFF6B2B);
-const kBg = Color(0xFF0A0A0A);
-const kCard = Color(0xFF151515);
-const kCard2 = Color(0xFF1E1E1E);
+const kOrangeLight = Color(0xFFFF8C5A);
+const kBg = Color(0xFF080808);
+const kCard = Color(0xFF111111);
+const kCard2 = Color(0xFF1A1A1A);
+const kCard3 = Color(0xFF222222);
 const kBorder = Color(0xFF2A2A2A);
+const kBorderLight = Color(0xFF333333);
 const kText = Colors.white;
-const kTextDim = Color(0xFF888888);
+const kTextDim = Color(0xFF777777);
+const kTextMid = Color(0xFFAAAAAA);
+const kGreen = Color(0xFF4ADE80);
+const kBlue = Color(0xFF60A5FA);
+const kPurple = Color(0xFFA78BFA);
+const kYellow = Color(0xFFFBBF24);
+const kRed = Color(0xFFF87171);
 const String kBaseUrl = 'https://gym-ia-n9tf.onrender.com';
 
+// ===================== MOCK DATA =====================
+final mockExercises = [
+  {'name': 'Squat', 'muscle': 'Quadriceps', 'type': 'Poids libre', 'difficulty': 'Intermédiaire', 'icon': '🦵', 'color': kOrange},
+  {'name': 'Développé couché', 'muscle': 'Pectoraux', 'type': 'Poids libre', 'difficulty': 'Intermédiaire', 'icon': '💪', 'color': kBlue},
+  {'name': 'Soulevé de terre', 'muscle': 'Ischio-jambiers', 'type': 'Poids libre', 'difficulty': 'Avancé', 'icon': '⚡', 'color': kPurple},
+  {'name': 'Tractions', 'muscle': 'Dos', 'type': 'Poids du corps', 'difficulty': 'Intermédiaire', 'icon': '🔝', 'color': kGreen},
+  {'name': 'Développé militaire', 'muscle': 'Épaules', 'type': 'Poids libre', 'difficulty': 'Intermédiaire', 'icon': '🏋️', 'color': kYellow},
+  {'name': 'Curl biceps', 'muscle': 'Biceps', 'type': 'Poids libre', 'difficulty': 'Débutant', 'icon': '💪', 'color': kOrangeLight},
+  {'name': 'Triceps poulie', 'muscle': 'Triceps', 'type': 'Machine', 'difficulty': 'Débutant', 'icon': '🔄', 'color': kRed},
+  {'name': 'Leg press', 'muscle': 'Quadriceps', 'type': 'Machine', 'difficulty': 'Débutant', 'icon': '🦿', 'color': kBlue},
+  {'name': 'Rowing barre', 'muscle': 'Dos', 'type': 'Poids libre', 'difficulty': 'Intermédiaire', 'icon': '🚣', 'color': kGreen},
+  {'name': 'Hip thrust', 'muscle': 'Fessiers', 'type': 'Poids libre', 'difficulty': 'Débutant', 'icon': '🍑', 'color': kPurple},
+  {'name': 'Fentes', 'muscle': 'Quadriceps', 'type': 'Poids libre', 'difficulty': 'Débutant', 'icon': '🚶', 'color': kOrange},
+  {'name': 'Tirage vertical', 'muscle': 'Dos', 'type': 'Machine', 'difficulty': 'Débutant', 'icon': '⬇️', 'color': kYellow},
+];
+
+final mockPrograms = [
+  {'name': 'Push Pull Legs', 'difficulty': 'Intermédiaire', 'duration': '6 semaines', 'goal': 'Masse musculaire', 'sessions': '6x/semaine', 'color': kOrange},
+  {'name': 'Full Body', 'difficulty': 'Débutant', 'duration': '8 semaines', 'goal': 'Force générale', 'sessions': '3x/semaine', 'color': kBlue},
+  {'name': 'Force 5x5', 'difficulty': 'Avancé', 'duration': '12 semaines', 'goal': 'Force maximale', 'sessions': '3x/semaine', 'color': kPurple},
+  {'name': 'Hypertrophie', 'difficulty': 'Intermédiaire', 'duration': '8 semaines', 'goal': 'Prise de masse', 'sessions': '5x/semaine', 'color': kGreen},
+  {'name': 'Sèche', 'difficulty': 'Intermédiaire', 'duration': '10 semaines', 'goal': 'Perte de gras', 'sessions': '5x/semaine', 'color': kYellow},
+];
+
+final mockRecipes = [
+  {'name': 'Omelette protéinée', 'meal': 'Petit déjeuner', 'calories': 420, 'protein': 38, 'time': '10 min', 'icon': '🍳', 'color': kYellow},
+  {'name': 'Riz poulet légumes', 'meal': 'Déjeuner', 'calories': 650, 'protein': 55, 'time': '25 min', 'icon': '🍗', 'color': kGreen},
+  {'name': 'Shake protéiné', 'meal': 'Snack', 'calories': 280, 'protein': 30, 'time': '2 min', 'icon': '🥤', 'color': kBlue},
+  {'name': 'Saumon patate douce', 'meal': 'Dîner', 'calories': 580, 'protein': 48, 'time': '30 min', 'icon': '🐟', 'color': kOrange},
+  {'name': 'Porridge avoine', 'meal': 'Petit déjeuner', 'calories': 350, 'protein': 15, 'time': '5 min', 'icon': '🥣', 'color': kPurple},
+  {'name': 'Salade thon quinoa', 'meal': 'Déjeuner', 'calories': 490, 'protein': 42, 'time': '15 min', 'icon': '🥗', 'color': kGreen},
+];
+
+// ===================== UTILS =====================
 Future<String> getDeviceId() async {
   final prefs = await SharedPreferences.getInstance();
   String? deviceId = prefs.getString('device_id');
@@ -36,28 +80,23 @@ class Clickable extends StatelessWidget {
   final VoidCallback onTap;
   const Clickable({super.key, required this.child, required this.onTap});
   @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(onTap: onTap, child: child),
-    );
-  }
+  Widget build(BuildContext context) => MouseRegion(
+    cursor: SystemMouseCursors.click,
+    child: GestureDetector(onTap: onTap, child: child),
+  );
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: kBg, useMaterial3: true),
-      home: const RootPage(),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: kBg, useMaterial3: true),
+    home: const RootPage(),
+  );
 }
 
 // ===================== ROOT PAGE =====================
-
 class RootPage extends StatefulWidget {
   const RootPage({super.key});
   @override
@@ -80,17 +119,14 @@ class _RootPageState extends State<RootPage> {
     final id = await getDeviceId();
     if (!mounted) return;
     setState(() => deviceId = id);
-    await loadUserData();       // 1. charge le profil
-    await _loadDailyMessage();  // 2. génère la phrase avec le profil
+    await loadUserData();
+    await _loadDailyMessage();
   }
 
   Future<void> loadUserData() async {
     if (deviceId.isEmpty) return;
     try {
-      final response = await http.get(
-        Uri.parse('$kBaseUrl/user-data/'),
-        headers: {'x-device-id': deviceId},
-      ).timeout(const Duration(seconds: 60));
+      final response = await http.get(Uri.parse('$kBaseUrl/user-data/'), headers: {'x-device-id': deviceId}).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         setState(() => userData = data.map((k, v) => MapEntry(k, v.toString())));
@@ -103,11 +139,8 @@ class _RootPageState extends State<RootPage> {
   Future<void> _loadDailyMessage() async {
     if (deviceId.isEmpty) return;
     try {
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final response = await http.get(
-        Uri.parse('$kBaseUrl/daily-message/?t=$timestamp'),
-        headers: {'x-device-id': deviceId},
-      ).timeout(const Duration(seconds: 60));
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final response = await http.get(Uri.parse('$kBaseUrl/daily-message/?t=$ts'), headers: {'x-device-id': deviceId}).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body);
         final msg = data['message']?.toString() ?? '';
@@ -116,55 +149,45 @@ class _RootPageState extends State<RootPage> {
     } catch (e) {}
   }
 
-  Future<void> refreshAll() async {
+  Future<void> refreshUserData() async {
     await loadUserData();
   }
 
   @override
   Widget build(BuildContext context) {
     if (deviceId.isEmpty) {
-      return const Scaffold(
-        backgroundColor: kBg,
-        body: Center(child: CircularProgressIndicator(color: kOrange)),
-      );
+      return const Scaffold(backgroundColor: kBg, body: Center(child: CircularProgressIndicator(color: kOrange)));
     }
+    final pages = [
+      HomePageV2(userData: userData, onUserDataChanged: refreshUserData, deviceId: deviceId, dailyMessage: dailyMessage),
+      CoachPageV2(deviceId: deviceId, onMessageSent: refreshUserData),
+      TrainingPageV2(userData: userData),
+      NutritionPageV2(userData: userData),
+      ProgressPageV2(userData: userData),
+    ];
     return Scaffold(
       backgroundColor: kBg,
       extendBody: true,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          HomePage(
-            userData: userData,
-            onUserDataChanged: refreshAll,
-            deviceId: deviceId,
-            dailyMessage: dailyMessage,
-          ),
-          CoachPage(onMessageSent: loadUserData, deviceId: deviceId),
-          TrainingPage(userData: userData),
-          NutritionPage(userData: userData),
-          ProgressPage(userData: userData),
-        ],
-      ),
+      body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: _buildNavBar(),
     );
   }
 
   Widget _buildNavBar() {
     final items = [
-      {"icon": Icons.home_rounded, "label": "Accueil"},
-      {"icon": Icons.psychology_rounded, "label": "Coach IA"},
-      {"icon": Icons.fitness_center_rounded, "label": "Training"},
-      {"icon": Icons.restaurant_rounded, "label": "Nutrition"},
-      {"icon": Icons.bar_chart_rounded, "label": "Progrès"},
+      {'icon': Icons.home_rounded, 'label': 'Accueil'},
+      {'icon': Icons.psychology_rounded, 'label': 'Coach IA'},
+      {'icon': Icons.fitness_center_rounded, 'label': 'Training'},
+      {'icon': Icons.restaurant_rounded, 'label': 'Nutrition'},
+      {'icon': Icons.bar_chart_rounded, 'label': 'Progrès'},
     ];
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: const Color(0xFF141414),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: kBorder),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 8))],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.6), blurRadius: 24, offset: const Offset(0, 8))],
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -175,9 +198,12 @@ class _RootPageState extends State<RootPage> {
             return Clickable(
               onTap: () => setState(() => _currentIndex = e.key),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
+                duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(color: isActive ? kOrange.withOpacity(0.15) : Colors.transparent, borderRadius: BorderRadius.circular(18)),
+                decoration: BoxDecoration(
+                  color: isActive ? kOrange.withOpacity(0.15) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(18),
+                ),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Icon(e.value['icon'] as IconData, color: isActive ? kOrange : kTextDim, size: 22),
                   const SizedBox(height: 3),
@@ -192,233 +218,374 @@ class _RootPageState extends State<RootPage> {
   }
 }
 
-// ===================== PAGE ACCUEIL =====================
-
-class HomePage extends StatefulWidget {
+// ===================== HOME PAGE V2 =====================
+// ignore_for_file: unused_field
+class HomePageV2 extends StatefulWidget {
   final Map<String, String> userData;
   final VoidCallback onUserDataChanged;
   final String deviceId;
   final String dailyMessage;
-  const HomePage({super.key, required this.userData, required this.onUserDataChanged, required this.deviceId, required this.dailyMessage});
+  const HomePageV2({super.key, required this.userData, required this.onUserDataChanged, required this.deviceId, required this.dailyMessage});
   @override
-  State<HomePage> createState() => _HomePageState();
+  State<HomePageV2> createState() => _HomePageV2State();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageV2State extends State<HomePageV2> with SingleTickerProviderStateMixin {
+  final ScrollController _scrollController = ScrollController();
   final TextEditingController _chatController = TextEditingController();
+  double _scrollOffset = 0;
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _animCtrl.forward();
+    _scrollController.addListener(() => setState(() => _scrollOffset = _scrollController.offset));
+  }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _chatController.dispose();
+    _animCtrl.dispose();
     super.dispose();
   }
 
   String _levelShort(String level) {
-    if (level == 'debutant') return 'Déb.';
-    if (level == 'intermediaire') return 'Inter.';
+    if (level == 'debutant') return 'Débutant';
+    if (level == 'intermediaire') return 'Intermédiaire';
     if (level == 'avance') return 'Avancé';
     return level;
   }
 
-  Widget _pill(String text, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 13, color: kOrange),
-        const SizedBox(width: 6),
-        Text(text, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6))),
-      ]),
+  String _getTimeGreeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Prêt pour la séance du matin ?';
+    if (h < 17) return 'Belle journée pour s\'entraîner';
+    return 'Séance du soir, on y va !';
+  }
+
+  void _openProfile() async {
+    await showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: kBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: SizedBox(width: 500, height: 600, child: ProfilePageV2(userData: widget.userData, deviceId: widget.deviceId)),
+      ),
     );
+    widget.onUserDataChanged();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(bottom: false, child: _buildScrollContent());
-  }
-
-  Widget _buildScrollContent() {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final name = widget.userData['name'] ?? '';
     final weight = widget.userData['weight'] ?? '--';
-    final sessions = widget.userData['sessions_per_week'] ?? '--';
     final squat = widget.userData['squat_weight'] ?? '--';
     final streak = widget.userData['streak'] ?? '--';
     final lastScore = widget.userData['last_squat_score'] ?? '--';
     final lastReps = widget.userData['last_squat_reps'] ?? '--';
     final lastDate = widget.userData['last_squat_date'] ?? '';
-    final age = widget.userData['age'] ?? '';
-    final height = widget.userData['height'] ?? '';
     final level = widget.userData['level'] ?? '';
+    final height = widget.userData['height'] ?? '';
+    final age = widget.userData['age'] ?? '';
+
+    // Transitions basées sur le scroll
+    final heroProgress = (_scrollOffset / (screenHeight * 0.45)).clamp(0.0, 1.0);
+    final heroOpacity = (1.0 - heroProgress * 1.4).clamp(0.0, 1.0);
+    final statsOpacity = ((heroProgress - 0.35) / 0.65).clamp(0.0, 1.0);
 
     List<Map<String, dynamic>> weightHistory = [];
     try {
       final raw = widget.userData['weight_history'] ?? '[]';
       weightHistory = (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e)).toList();
-    } catch (e) {}
+    } catch (_) {}
 
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                  Clickable(
-                    onTap: () async {
-                      await showDialog(
-                        context: context,
-                        builder: (context) => Dialog(
-                          backgroundColor: kBg,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          child: SizedBox(width: 500, height: 600, child: ProfilePage(userData: widget.userData, deviceId: widget.deviceId)),
-                        ),
-                      );
-                      widget.onUserDataChanged(); // Recharge userData SANS recharger le message
-                    },
-                    child: Container(width: 36, height: 36, decoration: BoxDecoration(color: kCard2, shape: BoxShape.circle, border: Border.all(color: kBorder)), child: const Icon(Icons.person_rounded, color: kTextDim, size: 17)),
-                  ),
-                ]),
-                const Spacer(),
-
-                // MESSAGE IA — généré par Groq dans RootPage
-                widget.dailyMessage.isEmpty
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: kOrange, strokeWidth: 2))
-                    : Text(
-                        widget.dailyMessage,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, height: 1.4, letterSpacing: -0.5),
-                      ),
-
-                const SizedBox(height: 32),
-                Container(
-                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
-                  child: Row(children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _chatController,
-                        style: const TextStyle(color: kText, fontSize: 15),
-                        maxLines: 1,
-                        decoration: InputDecoration(
-                          hintText: "Pose une question...",
-                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 15),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                        ),
-                        onSubmitted: (val) { if (val.trim().isNotEmpty) _chatController.clear(); },
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 10),
-                      child: Clickable(
-                        onTap: () => _chatController.clear(),
-                        child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(11)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 16)),
-                      ),
+    return SafeArea(
+      bottom: false,
+      child: Stack(
+        children: [
+          // ── LAYER 1 : Scroll content (stats) ──────────────────
+          CustomScrollView(
+            controller: _scrollController,
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // Espace plein écran pour le hero
+              SliverToBoxAdapter(child: SizedBox(height: screenHeight - 80)),
+              // Stats qui apparaissent après le scroll
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+                sliver: SliverList(
+                  delegate: SliverChildListDelegate([
+                    Opacity(
+                      opacity: statsOpacity,
+                      child: Column(children: [
+                        _buildProfileCard(name, weight, height, age, level),
+                        const SizedBox(height: 14),
+                        _buildPerfsRow(squat, streak, lastScore),
+                        const SizedBox(height: 14),
+                        _buildWeekCard(),
+                        const SizedBox(height: 14),
+                        if (weightHistory.length >= 2) ...[_buildWeightChart(weightHistory), const SizedBox(height: 14)],
+                        if (lastScore != '--') ...[_buildLastAnalysis(lastScore, lastReps, lastDate), const SizedBox(height: 14)],
+                        _buildQuickActions(),
+                      ]),
                     ),
                   ]),
                 ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8, runSpacing: 8, alignment: WrapAlignment.center,
-                  children: [
-                    _pill("Analyser mon squat", Icons.videocam_rounded),
-                    _pill("Améliorer ma technique", Icons.fitness_center_rounded),
-                    _pill("Augmenter la charge ?", Icons.trending_up_rounded),
-                    _pill("Programme sur mesure", Icons.bolt_rounded),
-                  ],
+              ),
+            ],
+          ),
+
+          // ── LAYER 2 : Hero plein écran ChatGPT-style ──────────
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: heroOpacity < 0.05,
+              child: Opacity(
+                opacity: heroOpacity,
+                child: FadeTransition(
+                  opacity: _fadeAnim,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(26, 0, 26, 100),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Top row : greeting + profil
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(
+                              name.isNotEmpty ? 'Bonjour, $name 👋' : 'Bonjour 👋',
+                              style: const TextStyle(fontSize: 14, color: kTextDim, fontWeight: FontWeight.w500),
+                            ),
+                            Text(_getTimeGreeting(), style: const TextStyle(fontSize: 11, color: Color(0xFF444444))),
+                          ]),
+                          Clickable(
+                            onTap: _openProfile,
+                            child: Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(
+                                color: kCard2, shape: BoxShape.circle,
+                                border: Border.all(color: name.isNotEmpty ? kOrange.withOpacity(0.5) : kBorder),
+                              ),
+                              child: name.isNotEmpty
+                                  ? Center(child: Text(name[0].toUpperCase(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kOrange)))
+                                  : const Icon(Icons.person_rounded, color: kTextDim, size: 18),
+                            ),
+                          ),
+                        ]),
+
+                        const Spacer(),
+
+                        // ── Phrase IA — grande, style ChatGPT ──
+                        widget.dailyMessage.isEmpty
+                            ? const SizedBox(height: 44, child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: kOrange, strokeWidth: 1.5))))
+                            : Text(
+                                widget.dailyMessage,
+                                style: const TextStyle(
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.bold,
+                                  color: kText,
+                                  height: 1.3,
+                                  letterSpacing: -0.8,
+                                ),
+                              ),
+
+                        const SizedBox(height: 28),
+
+                        // ── Barre d'écriture style ChatGPT ──
+                        Container(
+                          decoration: BoxDecoration(
+                            color: kCard,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: kBorderLight),
+                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 16, offset: const Offset(0, 4))],
+                          ),
+                          child: Row(children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _chatController,
+                                style: const TextStyle(color: kText, fontSize: 15),
+                                maxLines: 1,
+                                decoration: InputDecoration(
+                                  hintText: 'Pose une question à ton coach...',
+                                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.17), fontSize: 15),
+                                  border: InputBorder.none,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                                ),
+                                onSubmitted: (_) => _chatController.clear(),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(right: 10),
+                              child: Clickable(
+                                onTap: () => _chatController.clear(),
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)),
+                                  child: const Icon(Icons.send_rounded, color: Colors.white, size: 17),
+                                ),
+                              ),
+                            ),
+                          ]),
+                        ),
+
+                        const SizedBox(height: 14),
+
+                        // ── Pills de suggestions ──
+                        Wrap(spacing: 8, runSpacing: 8, children: [
+                          _pill('Analyser mon squat', Icons.videocam_rounded),
+                          _pill('Programme IA', Icons.auto_awesome_rounded),
+                          _pill('Augmenter la charge ?', Icons.trending_up_rounded),
+                          _pill('Recette protéinée', Icons.restaurant_rounded),
+                        ]),
+
+                        const Spacer(),
+
+                        // ── Indicateur scroll ──
+                        Center(child: Column(children: [
+                          Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white.withOpacity(0.1), size: 22),
+                          Text('Voir mes stats', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.1))),
+                        ])),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
                 ),
-                const Spacer(),
-                Column(children: [
-                  Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white.withOpacity(0.15), size: 22),
-                  Text("Défiler pour voir tes stats", style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.15))),
-                ]),
-                const SizedBox(height: 100),
-              ]),
+              ),
             ),
           ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text("MON PROFIL", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-                  const SizedBox(height: 14),
-                  Row(children: [
-                    _compactStat("Poids", "$weight kg", Icons.monitor_weight_outlined, Colors.blue),
-                    Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
-                    _compactStat("Taille", height.isNotEmpty ? "${height}cm" : '--', Icons.height_rounded, const Color(0xFF4CAF50)),
-                    Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
-                    _compactStat("Âge", age.isNotEmpty ? "$age ans" : '--', Icons.cake_rounded, Colors.purple),
-                    Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
-                    _compactStat("Niveau", level.isNotEmpty ? _levelShort(level) : '--', Icons.star_rounded, Colors.amber),
-                  ]),
-                  if (weightHistory.length >= 2) ...[
-                    const SizedBox(height: 20),
-                    const Text("ÉVOLUTION DU POIDS", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-                    const SizedBox(height: 12),
-                    SizedBox(height: 80, width: double.infinity, child: CustomPaint(painter: WeightChartPainter(weightHistory))),
-                    const SizedBox(height: 8),
-                    Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Text(weightHistory.first['date'] ?? '', style: const TextStyle(fontSize: 10, color: kTextDim)),
-                      Text(weightHistory.last['date'] ?? '', style: const TextStyle(fontSize: 10, color: kTextDim)),
-                    ]),
-                  ],
+
+          // ── LAYER 3 : Compact header après scroll ─────────────
+          AnimatedOpacity(
+            opacity: (1.0 - heroOpacity * 2).clamp(0.0, 1.0),
+            duration: const Duration(milliseconds: 150),
+            child: IgnorePointer(
+              ignoring: heroOpacity > 0.3,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+                decoration: BoxDecoration(
+                  color: kBg.withOpacity(0.96),
+                  border: Border(bottom: BorderSide(color: kBorder.withOpacity(0.4))),
+                ),
+                child: Row(children: [
+                  Expanded(
+                    child: Text(
+                      widget.dailyMessage,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kText),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Clickable(
+                    onTap: _openProfile,
+                    child: Container(
+                      width: 34, height: 34,
+                      decoration: BoxDecoration(color: kCard2, shape: BoxShape.circle, border: Border.all(color: kBorder)),
+                      child: name.isNotEmpty
+                          ? Center(child: Text(name[0].toUpperCase(), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kOrange)))
+                          : const Icon(Icons.person_rounded, color: kTextDim, size: 15),
+                    ),
+                  ),
                 ]),
               ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text("MES PERFS", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-                  const SizedBox(height: 14),
-                  Row(children: [
-                    _compactStat("Séances", sessions, Icons.bolt_rounded, kOrange),
-                    Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
-                    _compactStat("Squat", "$squat kg", Icons.fitness_center_rounded, const Color(0xFF4CAF50)),
-                    Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4)),
-                    _compactStat("Streak", "$streak j 🔥", Icons.local_fire_department_rounded, Colors.amber),
-                  ]),
-                ]),
-              ),
-              const SizedBox(height: 20),
-              _buildWeekWidget(),
-              const SizedBox(height: 20),
-              if (lastScore != '--') ...[
-                _buildLastAnalysis(lastScore, lastReps, lastDate),
-                const SizedBox(height: 20),
-              ],
-            ]),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _compactStat(String label, String value, IconData icon, Color color) {
+  Widget _pill(String text, IconData icon) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
+    child: Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 12, color: kOrange),
+      const SizedBox(width: 6),
+      Text(text, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.55))),
+    ]),
+  );
+
+  Widget _buildProfileCard(String name, String weight, String height, String age, String level) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text('MON PROFIL', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const Spacer(),
+          if (level.isNotEmpty) Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: kOrange.withOpacity(0.12), borderRadius: BorderRadius.circular(10), border: Border.all(color: kOrange.withOpacity(0.3))),
+            child: Text(_levelShort(level), style: const TextStyle(fontSize: 11, color: kOrange, fontWeight: FontWeight.w600)),
+          ),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          _miniStat('Poids', weight.isNotEmpty ? '$weight kg' : '--', Icons.monitor_weight_outlined, kBlue),
+          _divider(),
+          _miniStat('Taille', height.isNotEmpty ? '${height}cm' : '--', Icons.height_rounded, kGreen),
+          _divider(),
+          _miniStat('Âge', age.isNotEmpty ? '$age ans' : '--', Icons.cake_rounded, kPurple),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _divider() => Container(width: 1, height: 40, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4));
+
+  Widget _miniStat(String label, String value, IconData icon, Color color) {
     return Expanded(child: Column(children: [
       Icon(icon, color: color, size: 18),
-      const SizedBox(height: 6),
-      Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: kText), overflow: TextOverflow.ellipsis),
-      const SizedBox(height: 2),
+      const SizedBox(height: 5),
+      Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText), overflow: TextOverflow.ellipsis),
       Text(label, style: const TextStyle(fontSize: 10, color: kTextDim)),
     ]));
   }
 
-  Widget _buildWeekWidget() {
-    final days = ["L", "M", "M", "J", "V", "S", "D"];
+  Widget _buildPerfsRow(String squat, String streak, String score) {
+    return Row(children: [
+      Expanded(child: _perfCard('Squat', squat != '--' ? '$squat kg' : '--', Icons.fitness_center_rounded, kOrange)),
+      const SizedBox(width: 10),
+      Expanded(child: _perfCard('Streak', streak != '--' ? '$streak j 🔥' : '--', Icons.local_fire_department_rounded, kYellow)),
+      const SizedBox(width: 10),
+      Expanded(child: _perfCard('Score', score != '--' ? '$score/100' : '--', Icons.analytics_rounded, kGreen)),
+    ]);
+  }
+
+  Widget _perfCard(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+      child: Column(children: [
+        Icon(icon, color: color, size: 20),
+        const SizedBox(height: 6),
+        Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText), overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 2),
+        Text(label, style: const TextStyle(fontSize: 10, color: kTextDim)),
+      ]),
+    );
+  }
+
+  Widget _buildWeekCard() {
+    final days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
     final done = [true, true, false, true, false, false, false];
     final today = DateTime.now().weekday - 1;
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text("Cette semaine", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
-        const SizedBox(height: 14),
+        Row(children: [
+          const Text('CETTE SEMAINE', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const Spacer(),
+          Text('${done.where((d) => d).length}/7', style: const TextStyle(fontSize: 12, color: kOrange, fontWeight: FontWeight.bold)),
+        ]),
+        const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: days.asMap().entries.map((e) {
@@ -429,7 +596,7 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 6),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
-                width: 30, height: 30,
+                width: 32, height: 32,
                 decoration: BoxDecoration(
                   color: isDone ? kOrange : isToday ? kOrange.withOpacity(0.1) : kCard2,
                   shape: BoxShape.circle,
@@ -444,32 +611,84 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _buildWeightChart(List<Map<String, dynamic>> data) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('ÉVOLUTION DU POIDS', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+        const SizedBox(height: 12),
+        SizedBox(height: 80, child: CustomPaint(painter: _WeightChartPainter(data), size: Size.infinite)),
+        const SizedBox(height: 8),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(data.first['date'] ?? '', style: const TextStyle(fontSize: 10, color: kTextDim)),
+          Text(data.last['date'] ?? '', style: const TextStyle(fontSize: 10, color: kTextDim)),
+        ]),
+      ]),
+    );
+  }
+
   Widget _buildLastAnalysis(String score, String reps, String date) {
     final scoreInt = int.tryParse(score) ?? 0;
-    final color = scoreInt >= 80 ? const Color(0xFF4CAF50) : scoreInt >= 60 ? kOrange : Colors.red;
+    final color = scoreInt >= 80 ? kGreen : scoreInt >= 60 ? kOrange : kRed;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.2))),
       child: Row(children: [
-        Container(width: 50, height: 50, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Center(child: Text(score, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: color)))),
+        Container(
+          width: 52, height: 52,
+          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+          child: Center(child: Text(score, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color))),
+        ),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("Dernière analyse squat", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+          const Text('Dernière analyse squat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
           const SizedBox(height: 2),
-          Text("$reps reps · $date", style: const TextStyle(fontSize: 12, color: kTextDim)),
+          Text('$reps reps · $date', style: const TextStyle(fontSize: 12, color: kTextDim)),
         ])),
-        const Text("/100", style: TextStyle(fontSize: 12, color: kTextDim)),
+        const Text('/100', style: TextStyle(fontSize: 11, color: kTextDim)),
       ]),
     );
   }
+
+  Widget _buildQuickActions() {
+    final actions = [
+      {'label': 'Analyser squat', 'icon': Icons.videocam_rounded, 'color': kOrange},
+      {'label': 'Programme IA', 'icon': Icons.auto_awesome_rounded, 'color': kPurple},
+      {'label': 'Bilan semaine', 'icon': Icons.bar_chart_rounded, 'color': kBlue},
+      {'label': 'Recette rapide', 'icon': Icons.restaurant_rounded, 'color': kGreen},
+    ];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('ACTIONS RAPIDES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+      const SizedBox(height: 12),
+      GridView.count(
+        crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10,
+        shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+        childAspectRatio: 2.5,
+        children: actions.map((a) => Clickable(
+          onTap: () {},
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: (a['color'] as Color).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: (a['color'] as Color).withOpacity(0.2)),
+            ),
+            child: Row(children: [
+              Icon(a['icon'] as IconData, color: a['color'] as Color, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text(a['label'] as String, style: const TextStyle(fontSize: 12, color: kText, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+            ]),
+          ),
+        )).toList(),
+      ),
+    ]);
+  }
 }
 
-// ===================== COURBE POIDS =====================
-
-class WeightChartPainter extends CustomPainter {
+class _WeightChartPainter extends CustomPainter {
   final List<Map<String, dynamic>> data;
-  WeightChartPainter(this.data);
-
+  _WeightChartPainter(this.data);
   @override
   void paint(Canvas canvas, Size size) {
     if (data.length < 2) return;
@@ -477,38 +696,25 @@ class WeightChartPainter extends CustomPainter {
     final minW = weights.reduce((a, b) => a < b ? a : b) - 1;
     final maxW = weights.reduce((a, b) => a > b ? a : b) + 1;
     final range = maxW - minW == 0 ? 1.0 : maxW - minW;
-
     final paint = Paint()..color = kOrange..strokeWidth = 2.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
     final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter, end: Alignment.bottomCenter,
-        colors: [kOrange.withOpacity(0.25), kOrange.withOpacity(0.0)],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [kOrange.withOpacity(0.2), kOrange.withOpacity(0.0)]).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
       ..style = PaintingStyle.fill;
-
-    final path = Path();
-    final fillPath = Path();
-
+    final path = Path(), fillPath = Path();
     for (int i = 0; i < data.length; i++) {
       final x = i / (data.length - 1) * size.width;
       final y = size.height - ((weights[i] - minW) / range * size.height);
-      if (i == 0) {
-        path.moveTo(x, y);
-        fillPath.moveTo(x, size.height);
-        fillPath.lineTo(x, y);
-      } else {
-        final prevX = (i - 1) / (data.length - 1) * size.width;
-        final prevY = size.height - ((weights[i - 1] - minW) / range * size.height);
-        final cpX = (prevX + x) / 2;
-        path.cubicTo(cpX, prevY, cpX, y, x, y);
-        fillPath.cubicTo(cpX, prevY, cpX, y, x, y);
+      if (i == 0) { path.moveTo(x, y); fillPath.moveTo(x, size.height); fillPath.lineTo(x, y); }
+      else {
+        final px = (i - 1) / (data.length - 1) * size.width;
+        final py = size.height - ((weights[i - 1] - minW) / range * size.height);
+        final cpX = (px + x) / 2;
+        path.cubicTo(cpX, py, cpX, y, x, y);
+        fillPath.cubicTo(cpX, py, cpX, y, x, y);
       }
     }
-    fillPath.lineTo(size.width, size.height);
-    fillPath.close();
-    canvas.drawPath(fillPath, fillPaint);
-    canvas.drawPath(path, paint);
-
+    fillPath.lineTo(size.width, size.height); fillPath.close();
+    canvas.drawPath(fillPath, fillPaint); canvas.drawPath(path, paint);
     final dotPaint = Paint()..color = kOrange..style = PaintingStyle.fill;
     for (int i = 0; i < data.length; i++) {
       final x = i / (data.length - 1) * size.width;
@@ -516,590 +722,217 @@ class WeightChartPainter extends CustomPainter {
       canvas.drawCircle(Offset(x, y), 3.5, dotPaint);
     }
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  @override bool shouldRepaint(covariant CustomPainter _) => true;
 }
 
-// ===================== PAGE COACH IA =====================
-
-class CoachPage extends StatefulWidget {
-  final VoidCallback onMessageSent;
+// ===================== COACH PAGE V2 =====================
+class CoachPageV2 extends StatefulWidget {
   final String deviceId;
-  const CoachPage({super.key, required this.onMessageSent, required this.deviceId});
+  final VoidCallback onMessageSent;
+  const CoachPageV2({super.key, required this.deviceId, required this.onMessageSent});
   @override
-  State<CoachPage> createState() => _CoachPageState();
+  State<CoachPageV2> createState() => _CoachPageV2State();
 }
 
-class _CoachPageState extends State<CoachPage> {
+class _CoachPageV2State extends State<CoachPageV2> {
   List<Map<String, dynamic>> conversations = [];
   int? activeConvId;
   bool sidebarOpen = true;
   String? _pendingSuggestion;
 
-  @override
-  void initState() {
-    super.initState();
-    loadConversations();
-  }
-
   Map<String, String> get _headers => {'x-device-id': widget.deviceId};
+
+  @override
+  void initState() { super.initState(); loadConversations(); }
 
   Future<void> loadConversations() async {
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/conversations/'), headers: _headers);
-      final data = jsonDecode(response.body) as List;
+      final r = await http.get(Uri.parse('$kBaseUrl/conversations/'), headers: _headers);
+      final data = jsonDecode(r.body) as List;
       setState(() => conversations = data.map((e) => Map<String, dynamic>.from(e)).toList());
-    } catch (e) {}
+    } catch (_) {}
   }
 
   Future<void> createNewConversation({String? suggestion}) async {
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/conversations/'));
-      request.headers.addAll(_headers);
-      request.fields['objectif'] = 'general';
-      request.fields['title'] = suggestion ?? 'Nouvelle conversation';
-      var response = await request.send();
-      var body = await response.stream.bytesToString();
+      var req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/conversations/'));
+      req.headers.addAll(_headers);
+      req.fields['objectif'] = 'general';
+      req.fields['title'] = suggestion ?? 'Nouvelle conversation';
+      var res = await req.send();
+      var body = await res.stream.bytesToString();
       final data = jsonDecode(body);
-      setState(() {
-        conversations.insert(0, Map<String, dynamic>.from(data));
-        activeConvId = data['id'];
-        _pendingSuggestion = suggestion;
-      });
-    } catch (e) {}
+      setState(() { conversations.insert(0, Map<String, dynamic>.from(data)); activeConvId = data['id']; _pendingSuggestion = suggestion; });
+    } catch (_) {}
   }
 
   Future<void> deleteConversation(int id) async {
     try {
       await http.delete(Uri.parse('$kBaseUrl/conversations/$id'), headers: _headers);
-      setState(() {
-        conversations.removeWhere((c) => c['id'] == id);
-        if (activeConvId == id) activeConvId = null;
-      });
-    } catch (e) {}
+      setState(() { conversations.removeWhere((c) => c['id'] == id); if (activeConvId == id) activeConvId = null; });
+    } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Row(children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          width: sidebarOpen ? 240 : 0,
-          child: sidebarOpen ? _buildSidebar() : const SizedBox(),
-        ),
-        Expanded(
-          child: Column(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(color: const Color(0xFF111111), border: Border(bottom: BorderSide(color: kBorder))),
-              child: Row(children: [
-                MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: () => setState(() => sidebarOpen = !sidebarOpen), icon: Icon(Icons.menu_rounded, color: Colors.white.withOpacity(0.4), size: 20))),
-                const SizedBox(width: 6),
-                const Icon(Icons.psychology_rounded, color: kOrange, size: 18),
-                const SizedBox(width: 8),
-                const Text("Coach IA", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
-                const Spacer(),
-                MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: () => createNewConversation(), icon: const Icon(Icons.edit_outlined, color: kOrange, size: 18))),
-              ]),
-            ),
-            Expanded(
-              child: activeConvId == null
-                  ? _buildWelcome()
-                  : ChatView(
-                      key: ValueKey(activeConvId),
-                      convId: activeConvId!,
-                      deviceId: widget.deviceId,
-                      initialMessage: _pendingSuggestion,
-                      onTitleUpdate: (title) {
-                        setState(() {
-                          _pendingSuggestion = null;
-                          final idx = conversations.indexWhere((c) => c['id'] == activeConvId);
-                          if (idx != -1) conversations[idx]['title'] = title;
-                        });
-                      },
-                      onMessageSent: widget.onMessageSent,
-                    ),
-            ),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildSidebar() {
-    return Container(
-      decoration: BoxDecoration(color: const Color(0xFF111111), border: Border(right: BorderSide(color: kBorder))),
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => createNewConversation(),
-              icon: const Icon(Icons.add_rounded, size: 15),
-              label: const Text("Nouveau chat", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 11), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-            ),
-          ),
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Align(alignment: Alignment.centerLeft, child: Text("RÉCENT", style: TextStyle(fontSize: 10, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2))),
-        ),
-        Expanded(
-          child: conversations.isEmpty
-              ? Center(child: Text("Aucune conversation", style: TextStyle(color: Colors.white.withOpacity(0.15), fontSize: 12)))
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  itemCount: conversations.length,
-                  itemBuilder: (context, index) {
-                    final conv = conversations[index];
-                    final isActive = conv['id'] == activeConvId;
-                    return Clickable(
-                      onTap: () => setState(() => activeConvId = conv['id']),
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 2),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                        decoration: BoxDecoration(color: isActive ? kOrange.withOpacity(0.1) : Colors.transparent, borderRadius: BorderRadius.circular(10), border: Border.all(color: isActive ? kOrange.withOpacity(0.3) : Colors.transparent)),
-                        child: Row(children: [
-                          Icon(Icons.chat_bubble_outline_rounded, size: 13, color: isActive ? kOrange : const Color(0xFF555555)),
-                          const SizedBox(width: 8),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(conv['title'] ?? 'Conversation', style: TextStyle(fontSize: 12, color: isActive ? Colors.white : const Color(0xFF888888), fontWeight: isActive ? FontWeight.w600 : FontWeight.normal), overflow: TextOverflow.ellipsis),
-                            Text(conv['updated_at'] ?? '', style: const TextStyle(fontSize: 10, color: Color(0xFF444444))),
-                          ])),
-                          Clickable(onTap: () => deleteConversation(conv['id']), child: Padding(padding: const EdgeInsets.only(left: 4), child: Icon(Icons.close_rounded, size: 12, color: Colors.white.withOpacity(0.2)))),
-                        ]),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildWelcome() {
-    final suggestions = [
-      {"icon": Icons.videocam_rounded, "text": "Analyse mon squat"},
-      {"icon": Icons.fitness_center_rounded, "text": "Programme pour gagner en force"},
-      {"icon": Icons.compare_arrows_rounded, "text": "Améliorer ma profondeur de squat"},
-      {"icon": Icons.monitor_heart_outlined, "text": "Puis-je augmenter la charge ?"},
-      {"icon": Icons.lightbulb_outline_rounded, "text": "Quels muscles travaille le squat ?"},
-      {"icon": Icons.schedule_rounded, "text": "Combien de séances par semaine ?"},
-    ];
-    return Column(children: [
-      Expanded(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: kOrange.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: kOrange.withOpacity(0.2))), child: const Icon(Icons.psychology_rounded, size: 40, color: kOrange)),
-              const SizedBox(height: 20),
-              const Text("Coach IA", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: kText)),
-              const SizedBox(height: 6),
-              Text("Ton coach sportif personnel", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3))),
-              const SizedBox(height: 32),
-              Wrap(
-                spacing: 8, runSpacing: 8, alignment: WrapAlignment.center,
-                children: suggestions.map((s) => Clickable(
-                  onTap: () => createNewConversation(suggestion: s['text'] as String),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(s['icon'] as IconData, size: 14, color: kOrange),
-                      const SizedBox(width: 8),
-                      Text(s['text'] as String, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.65))),
-                    ]),
-                  ),
-                )).toList(),
-              ),
-            ]),
-          ),
-        ),
+    return SafeArea(bottom: false, child: Row(children: [
+      AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        width: sidebarOpen ? 240 : 0,
+        child: sidebarOpen ? _buildSidebar() : const SizedBox(),
       ),
-      Container(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 90),
-        decoration: BoxDecoration(color: const Color(0xFF111111), border: Border(top: BorderSide(color: kBorder))),
-        child: Row(children: [
-          Expanded(
-            child: TextField(
-              style: const TextStyle(color: kText, fontSize: 14),
-              decoration: InputDecoration(
-                hintText: "Pose une question à ton coach...",
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
-                filled: true, fillColor: kCard2,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-              onSubmitted: (val) { if (val.trim().isNotEmpty) createNewConversation(suggestion: val.trim()); },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Clickable(
-            onTap: () => createNewConversation(),
-            child: Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 17)),
-          ),
-        ]),
-      ),
-    ]);
+      Expanded(child: Column(children: [
+        _buildHeader(),
+        Expanded(child: activeConvId == null ? _buildWelcome() : ChatViewV2(
+          key: ValueKey(activeConvId),
+          convId: activeConvId!,
+          deviceId: widget.deviceId,
+          initialMessage: _pendingSuggestion,
+          onTitleUpdate: (title) => setState(() { _pendingSuggestion = null; final idx = conversations.indexWhere((c) => c['id'] == activeConvId); if (idx != -1) conversations[idx]['title'] = title; }),
+          onMessageSent: widget.onMessageSent,
+        )),
+      ])),
+    ]));
   }
-}
 
-// ===================== PAGE TRAINING =====================
+  Widget _buildHeader() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    decoration: BoxDecoration(color: const Color(0xFF0D0D0D), border: Border(bottom: BorderSide(color: kBorder))),
+    child: Row(children: [
+      MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: () => setState(() => sidebarOpen = !sidebarOpen), icon: Icon(Icons.menu_rounded, color: Colors.white.withOpacity(0.4), size: 20))),
+      const SizedBox(width: 6),
+      Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.psychology_rounded, size: 14, color: kOrange)),
+      const SizedBox(width: 8),
+      const Text('Coach IA', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+      const Spacer(),
+      MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: () => createNewConversation(), icon: const Icon(Icons.edit_outlined, color: kOrange, size: 18))),
+    ]),
+  );
 
-class TrainingPage extends StatelessWidget {
-  final Map<String, String> userData;
-  const TrainingPage({super.key, required this.userData});
-
-  final List<Map<String, dynamic>> programs = const [
-    {"title": "Prise de masse", "desc": "Gagner du muscle efficacement", "icon": Icons.trending_up_rounded, "color": Color(0xFFFF6B2B), "sessions": "4x/semaine", "duration": "60 min"},
-    {"title": "Sèche", "desc": "Perdre du gras en gardant le muscle", "icon": Icons.local_fire_department_rounded, "color": Color(0xFFFF4444), "sessions": "5x/semaine", "duration": "45 min"},
-    {"title": "Force", "desc": "Augmenter tes charges maximales", "icon": Icons.bolt_rounded, "color": Color(0xFF4CAF50), "sessions": "3x/semaine", "duration": "75 min"},
-    {"title": "Endurance", "desc": "Améliorer ton cardio", "icon": Icons.directions_run_rounded, "color": Color(0xFF2196F3), "sessions": "4x/semaine", "duration": "50 min"},
-    {"title": "Débutant", "desc": "Commencer progressivement", "icon": Icons.star_outline_rounded, "color": Color(0xFFFFBB33), "sessions": "3x/semaine", "duration": "40 min"},
-    {"title": "Maison", "desc": "Sans équipement", "icon": Icons.home_rounded, "color": Color(0xFF9C27B0), "sessions": "4x/semaine", "duration": "35 min"},
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final squat = userData['squat_weight'] ?? '--';
-    final bench = userData['bench_weight'] ?? '--';
-    final deadlift = userData['deadlift_weight'] ?? '--';
-
-    return SafeArea(
-      bottom: false,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("Entraînements", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kText)),
-          const SizedBox(height: 4),
-          Text("Choisis ton programme", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
-          if (squat != '--' || bench != '--' || deadlift != '--') ...[
-            const SizedBox(height: 24),
-            const Text("MES CHARGES", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-            const SizedBox(height: 12),
-            Row(children: [
-              if (squat != '--') Expanded(child: _chargeCard("Squat", squat, kOrange)),
-              if (squat != '--' && bench != '--') const SizedBox(width: 10),
-              if (bench != '--') Expanded(child: _chargeCard("Bench", bench, const Color(0xFF4CAF50))),
-              if (bench != '--' && deadlift != '--') const SizedBox(width: 10),
-              if (deadlift != '--') Expanded(child: _chargeCard("Deadlift", deadlift, const Color(0xFF2196F3))),
-            ]),
-          ],
-          const SizedBox(height: 24),
-          const Text("PROGRAMMES", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-          const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.2),
-            itemCount: programs.length,
-            itemBuilder: (context, index) {
-              final p = programs[index];
+  Widget _buildSidebar() => Container(
+    decoration: BoxDecoration(color: const Color(0xFF0D0D0D), border: Border(right: BorderSide(color: kBorder))),
+    child: Column(children: [
+      Padding(
+        padding: const EdgeInsets.all(12),
+        child: SizedBox(width: double.infinity, child: ElevatedButton.icon(
+          onPressed: () => createNewConversation(),
+          icon: const Icon(Icons.add_rounded, size: 15),
+          label: const Text('Nouveau chat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 11), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+        )),
+      ),
+      const Padding(padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4), child: Align(alignment: Alignment.centerLeft, child: Text('RÉCENT', style: TextStyle(fontSize: 10, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)))),
+      Expanded(child: conversations.isEmpty
+        ? Center(child: Text('Aucune conversation', style: TextStyle(color: Colors.white.withOpacity(0.15), fontSize: 12)))
+        : ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            itemCount: conversations.length,
+            itemBuilder: (context, i) {
+              final conv = conversations[i];
+              final isActive = conv['id'] == activeConvId;
               return Clickable(
-                onTap: () => showDialog(context: context, builder: (context) => ProgramDetailDialog(program: p)),
+                onTap: () => setState(() => activeConvId = conv['id']),
                 child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: (p['color'] as Color).withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(p['icon'] as IconData, color: p['color'] as Color, size: 20)),
-                    const Spacer(),
-                    Text(p['title'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
-                    const SizedBox(height: 2),
-                    Text("${p['sessions']} · ${p['duration']}", style: const TextStyle(fontSize: 11, color: kTextDim)),
+                  margin: const EdgeInsets.only(bottom: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  decoration: BoxDecoration(color: isActive ? kOrange.withOpacity(0.1) : Colors.transparent, borderRadius: BorderRadius.circular(10), border: Border.all(color: isActive ? kOrange.withOpacity(0.3) : Colors.transparent)),
+                  child: Row(children: [
+                    Icon(Icons.chat_bubble_outline_rounded, size: 13, color: isActive ? kOrange : const Color(0xFF555555)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(conv['title'] ?? 'Conversation', style: TextStyle(fontSize: 12, color: isActive ? Colors.white : const Color(0xFF888888), fontWeight: isActive ? FontWeight.w600 : FontWeight.normal), overflow: TextOverflow.ellipsis),
+                      Text(conv['updated_at'] ?? '', style: const TextStyle(fontSize: 10, color: Color(0xFF444444))),
+                    ])),
+                    Clickable(onTap: () => deleteConversation(conv['id']), child: Padding(padding: const EdgeInsets.only(left: 4), child: Icon(Icons.close_rounded, size: 12, color: Colors.white.withOpacity(0.2)))),
                   ]),
                 ),
               );
             },
-          ),
-        ]),
-      ),
-    );
-  }
+          )),
+    ]),
+  );
 
-  Widget _chargeCard(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withOpacity(0.2))),
-      child: Column(children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: kTextDim, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        Text("$value kg", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-      ]),
-    );
-  }
-}
-
-class ProgramDetailDialog extends StatelessWidget {
-  final Map<String, dynamic> program;
-  const ProgramDetailDialog({super.key, required this.program});
-
-  @override
-  Widget build(BuildContext context) {
-    final exercises = ["Squat", "Presse à cuisses", "Fentes", "Leg curl", "Mollets debout"];
-    return Dialog(
-      backgroundColor: kBg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: SizedBox(
-        width: 500,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: (program['color'] as Color).withOpacity(0.15), borderRadius: BorderRadius.circular(14)), child: Icon(program['icon'] as IconData, color: program['color'] as Color, size: 24)),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(program['title'] as String, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
-                Text(program['desc'] as String, style: const TextStyle(fontSize: 12, color: kTextDim)),
-              ])),
-              Clickable(onTap: () => Navigator.pop(context), child: const Icon(Icons.close_rounded, color: Color(0xFF555555), size: 20)),
-            ]),
-            const SizedBox(height: 20),
-            const Text("PLANNING", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1)),
-            const SizedBox(height: 10),
-            Row(children: ["L", "M", "M", "J", "V", "S", "D"].asMap().entries.map((e) {
-              final active = [0, 2, 4].contains(e.key);
-              return Expanded(child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(color: active ? kOrange : kCard2, borderRadius: BorderRadius.circular(8), border: Border.all(color: active ? kOrange : kBorder)),
-                child: Text(e.value, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: active ? Colors.white : const Color(0xFF555555))),
-              ));
-            }).toList()),
-            const SizedBox(height: 20),
-            const Text("EXERCICES", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1)),
-            const SizedBox(height: 10),
-            ...exercises.asMap().entries.map((e) => Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
-              child: Row(children: [
-                Container(width: 28, height: 28, decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(8)), child: Center(child: Text("${e.key + 1}", style: const TextStyle(fontSize: 12, color: kOrange, fontWeight: FontWeight.bold)))),
-                const SizedBox(width: 12),
-                Expanded(child: Text(e.value, style: const TextStyle(fontSize: 14, color: kText))),
-                const Text("4×8", style: TextStyle(fontSize: 12, color: kTextDim)),
-              ]),
-            )).toList(),
-          ]),
-        ),
-      ),
-    );
-  }
-}
-
-// ===================== PAGE NUTRITION =====================
-
-class NutritionPage extends StatelessWidget {
-  final Map<String, String> userData;
-  const NutritionPage({super.key, required this.userData});
-
-  @override
-  Widget build(BuildContext context) {
-    final calories = userData['calories'] ?? '2400';
-    final meals = [
-      {"title": "Petit déjeuner", "time": "7h00", "kcal": "520", "protein": "32g", "icon": Icons.wb_sunny_rounded, "color": const Color(0xFFFFBB33), "done": true},
-      {"title": "Déjeuner", "time": "12h30", "kcal": "680", "protein": "55g", "icon": Icons.restaurant_rounded, "color": const Color(0xFF4CAF50), "done": true},
-      {"title": "Snack", "time": "16h00", "kcal": "220", "protein": "18g", "icon": Icons.apple_rounded, "color": kOrange, "done": false},
-      {"title": "Dîner", "time": "19h30", "kcal": "580", "protein": "48g", "icon": Icons.nightlight_rounded, "color": const Color(0xFF6C63FF), "done": false},
+  Widget _buildWelcome() {
+    final suggestions = [
+      {'icon': Icons.videocam_rounded, 'text': 'Analyse mon squat', 'color': kOrange},
+      {'icon': Icons.fitness_center_rounded, 'text': 'Programme pour prendre de la masse', 'color': kBlue},
+      {'icon': Icons.compare_arrows_rounded, 'text': 'Comment améliorer mon deadlift ?', 'color': kPurple},
+      {'icon': Icons.monitor_heart_outlined, 'text': 'Puis-je augmenter ma charge ?', 'color': kGreen},
+      {'icon': Icons.restaurant_rounded, 'text': 'Que manger avant une séance ?', 'color': kYellow},
+      {'icon': Icons.schedule_rounded, 'text': 'Combien de séances par semaine ?', 'color': kOrangeLight},
     ];
-    final totalKcal = 520 + 680;
-    final targetKcal = int.tryParse(calories) ?? 2400;
-    final progress = totalKcal / targetKcal;
-
-    return SafeArea(
-      bottom: false,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("Nutrition", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kText)),
-          const SizedBox(height: 4),
-          Text("Suis ton alimentation", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
-            child: Column(children: [
-              Row(children: [
-                const Text("Calories aujourd'hui", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
-                const Spacer(),
-                Text("$totalKcal / $targetKcal kcal", style: const TextStyle(fontSize: 13, color: kTextDim)),
-              ]),
-              const SizedBox(height: 14),
-              ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: progress.clamp(0.0, 1.0), backgroundColor: kBorder, valueColor: const AlwaysStoppedAnimation(kOrange), minHeight: 8)),
-              const SizedBox(height: 14),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                _macroChip("Protéines", "87g", const Color(0xFF4CAF50)),
-                _macroChip("Glucides", "180g", Colors.blue),
-                _macroChip("Lipides", "45g", Colors.amber),
-              ]),
-            ]),
-          ),
-          const SizedBox(height: 24),
-          const Text("REPAS DU JOUR", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-          const SizedBox(height: 12),
-          ...meals.map((meal) => Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: (meal['done'] as bool) ? (meal['color'] as Color).withOpacity(0.2) : kBorder)),
-            child: Row(children: [
-              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: (meal['color'] as Color).withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(meal['icon'] as IconData, color: meal['color'] as Color, size: 20)),
-              const SizedBox(width: 14),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(meal['title'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
-                const SizedBox(height: 2),
-                Text("${meal['kcal']} kcal · ${meal['protein']} protéines · ${meal['time']}", style: const TextStyle(fontSize: 12, color: kTextDim)),
-              ])),
-              if (meal['done'] as bool)
-                Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: const Color(0xFF4CAF50).withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.check_rounded, color: Color(0xFF4CAF50), size: 14))
-              else
-                Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: kCard2, shape: BoxShape.circle, border: Border.all(color: kBorder)), child: const Icon(Icons.add_rounded, color: kTextDim, size: 14)),
-            ]),
-          )).toList(),
-        ]),
-      ),
-    );
-  }
-
-  Widget _macroChip(String label, String value, Color color) {
     return Column(children: [
-      Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-      const SizedBox(height: 2),
-      Text(label, style: const TextStyle(fontSize: 11, color: kTextDim)),
+      Expanded(child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              gradient: RadialGradient(colors: [kOrange.withOpacity(0.15), Colors.transparent], radius: 1),
+              shape: BoxShape.circle,
+              border: Border.all(color: kOrange.withOpacity(0.2)),
+            ),
+            child: const Icon(Icons.psychology_rounded, size: 44, color: kOrange),
+          ),
+          const SizedBox(height: 20),
+          const Text('Coach IA', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kText)),
+          const SizedBox(height: 6),
+          Text('Ton coach sportif IA personnel', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3))),
+          const SizedBox(height: 32),
+          Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: suggestions.map((s) => Clickable(
+            onTap: () => createNewConversation(suggestion: s['text'] as String),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: (s['color'] as Color).withOpacity(0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: (s['color'] as Color).withOpacity(0.2))),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(s['icon'] as IconData, size: 14, color: s['color'] as Color),
+                const SizedBox(width: 8),
+                Text(s['text'] as String, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.7))),
+              ]),
+            ),
+          )).toList()),
+        ]),
+      )),
+      _buildInputBar(),
     ]);
   }
+
+  Widget _buildInputBar() => Container(
+    padding: const EdgeInsets.fromLTRB(14, 14, 14, 90),
+    decoration: BoxDecoration(color: const Color(0xFF0D0D0D), border: Border(top: BorderSide(color: kBorder))),
+    child: Row(children: [
+      Expanded(child: TextField(
+        style: const TextStyle(color: kText, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Pose une question à ton coach...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
+          filled: true, fillColor: kCard2,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+        onSubmitted: (val) { if (val.trim().isNotEmpty) createNewConversation(suggestion: val.trim()); },
+      )),
+      const SizedBox(width: 8),
+      Clickable(onTap: () => createNewConversation(), child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 17))),
+    ]),
+  );
 }
 
-// ===================== PAGE PROGRESSION =====================
-
-class ProgressPage extends StatelessWidget {
-  final Map<String, String> userData;
-  const ProgressPage({super.key, required this.userData});
-
-  Widget _statCard(String label, String value, String change, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: kTextDim, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kText)),
-        const SizedBox(height: 4),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: Text(change, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600))),
-      ]),
-    );
-  }
-
-  Widget _exerciseBar(String name, String value, double progress, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text(name, style: const TextStyle(fontSize: 13, color: kText, fontWeight: FontWeight.w500)),
-          const Spacer(),
-          Text(value, style: const TextStyle(fontSize: 13, color: kTextDim)),
-        ]),
-        const SizedBox(height: 8),
-        ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: progress.clamp(0.0, 1.0), backgroundColor: kBorder, valueColor: AlwaysStoppedAnimation(color), minHeight: 6)),
-      ]),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final squat = userData['squat_weight'] ?? '--';
-    final bench = userData['bench_weight'] ?? '--';
-    final deadlift = userData['deadlift_weight'] ?? '--';
-    final weight = userData['weight'] ?? '--';
-    final sessions = userData['sessions_per_week'] ?? '--';
-    final streak = userData['streak'] ?? '--';
-    final lastScore = userData['last_squat_score'] ?? '--';
-    final goal = userData['goal'] ?? '';
-    double squatProgress = squat != '--' ? (double.tryParse(squat) ?? 0) / 200 : 0.3;
-    double benchProgress = bench != '--' ? (double.tryParse(bench) ?? 0) / 150 : 0.3;
-    double deadliftProgress = deadlift != '--' ? (double.tryParse(deadlift) ?? 0) / 250 : 0.3;
-
-    return SafeArea(
-      bottom: false,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text("Progression", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: kText)),
-          const SizedBox(height: 4),
-          Text("Suis tes performances", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
-          const SizedBox(height: 24),
-          const Text("CE MOIS", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-          const SizedBox(height: 12),
-          GridView.count(
-            crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.4,
-            children: [
-              _statCard("Poids", "$weight kg", "Mis à jour", Colors.blue),
-              _statCard("Séances", "$sessions /sem", "Cette semaine", kOrange),
-              _statCard("Streak", "$streak jours", "🔥 Continue !", Colors.amber),
-              _statCard("Score squat", "$lastScore/100", "Dernière analyse", const Color(0xFF4CAF50)),
-            ],
-          ),
-          const SizedBox(height: 24),
-          const Text("MES CHARGES", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
-            child: Column(children: [
-              _exerciseBar("Squat", squat != '--' ? "$squat kg" : "Non renseigné", squatProgress, kOrange),
-              _exerciseBar("Développé couché", bench != '--' ? "$bench kg" : "Non renseigné", benchProgress, const Color(0xFF4CAF50)),
-              _exerciseBar("Soulevé de terre", deadlift != '--' ? "$deadlift kg" : "Non renseigné", deadliftProgress, const Color(0xFF2196F3)),
-            ]),
-          ),
-          const SizedBox(height: 24),
-          const Text("RÉSUMÉ IA", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kOrange.withOpacity(0.2))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(padding: const EdgeInsets.all(7), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.auto_awesome_rounded, color: kOrange, size: 16)),
-                const SizedBox(width: 10),
-                const Text("Analyse IA", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
-              ]),
-              const SizedBox(height: 12),
-              Text(goal.isNotEmpty ? "Objectif : $goal. Continue à travailler et parle à ton coach pour un bilan complet !" : "Parle à ton coach IA pour obtenir un résumé personnalisé de ta semaine.", style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6), height: 1.5)),
-              const SizedBox(height: 14),
-              ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.psychology_rounded, size: 15),
-                label: const Text("Demander un bilan", style: TextStyle(fontSize: 13)),
-                style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-              ),
-            ]),
-          ),
-        ]),
-      ),
-    );
-  }
-}
-
-// ===================== CHAT VIEW =====================
-
-class ChatView extends StatefulWidget {
+// ===================== CHAT VIEW V2 =====================
+class ChatViewV2 extends StatefulWidget {
   final int convId;
   final Function(String) onTitleUpdate;
   final VoidCallback onMessageSent;
   final String? initialMessage;
   final String deviceId;
-  const ChatView({super.key, required this.convId, required this.onTitleUpdate, required this.onMessageSent, this.initialMessage, required this.deviceId});
+  const ChatViewV2({super.key, required this.convId, required this.onTitleUpdate, required this.onMessageSent, this.initialMessage, required this.deviceId});
   @override
-  State<ChatView> createState() => _ChatViewState();
+  State<ChatViewV2> createState() => _ChatViewV2State();
 }
 
-class _ChatViewState extends State<ChatView> {
+class _ChatViewV2State extends State<ChatViewV2> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> messages = [];
@@ -1122,210 +955,148 @@ class _ChatViewState extends State<ChatView> {
 
   Future<void> loadMessages() async {
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/conversations/${widget.convId}/messages'), headers: _headers);
-      final data = jsonDecode(response.body) as List;
+      final r = await http.get(Uri.parse('$kBaseUrl/conversations/${widget.convId}/messages'), headers: _headers);
+      final data = jsonDecode(r.body) as List;
       setState(() => messages = data.map((e) => Map<String, dynamic>.from(e)).toList());
       _scrollToBottom();
-    } catch (e) {}
+    } catch (_) {}
   }
 
   Future<void> pickVideo() async {
     FilePickerResult? picked = await FilePicker.platform.pickFiles(type: FileType.video, withData: true);
-    if (picked != null) {
-      setState(() { pendingVideoBytes = picked.files.single.bytes; pendingVideoName = picked.files.single.name; });
-    }
+    if (picked != null) setState(() { pendingVideoBytes = picked.files.single.bytes; pendingVideoName = picked.files.single.name; });
   }
 
   Future<void> sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty && pendingVideoBytes == null) return;
-    final displayText = text.isNotEmpty ? text : "Analyse cette vidéo";
-    setState(() {
-      messages.add({"role": "user", "content": displayText, "video_filename": pendingVideoName});
-      isLoading = true;
-    });
+    final displayText = text.isNotEmpty ? text : 'Analyse cette vidéo';
+    setState(() { messages.add({'role': 'user', 'content': displayText, 'video_filename': pendingVideoName}); isLoading = true; });
     _controller.clear();
-    final videoBytes = pendingVideoBytes;
-    final videoName = pendingVideoName;
-    pendingVideoBytes = null;
-    pendingVideoName = null;
+    final vb = pendingVideoBytes; final vn = pendingVideoName;
+    pendingVideoBytes = null; pendingVideoName = null;
     _scrollToBottom();
-
     try {
-      var request = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/conversations/${widget.convId}/chat'));
-      request.headers.addAll(_headers);
-      request.fields['message'] = text.isNotEmpty ? text : "Analyse cette vidéo et donne-moi des conseils détaillés";
+      var req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/conversations/${widget.convId}/chat'));
+      req.headers.addAll(_headers);
+      req.fields['message'] = text.isNotEmpty ? text : 'Analyse cette vidéo et donne-moi des conseils détaillés';
       final prefs = await SharedPreferences.getInstance();
-      final profile = {
-        'name': prefs.getString('name') ?? '',
-        'age': prefs.getString('age') ?? '',
-        'weight': prefs.getString('weight') ?? '',
-        'height': prefs.getString('height') ?? '',
-        'level': prefs.getString('level') ?? '',
-        'goal': prefs.getString('goal') ?? '',
-      };
-      request.fields['user_profile'] = jsonEncode(profile);
-      if (videoBytes != null && videoName != null) {
-        request.files.add(http.MultipartFile.fromBytes('file', videoBytes, filename: videoName));
-      }
-      var response = await request.send();
-      var body = await response.stream.bytesToString();
-      final json = jsonDecode(body);
-      final String assistantContent = json['response'] ?? '';
-      setState(() {
-        messages.add({"role": "assistant", "content": assistantContent, "video_filename": null});
-        isLoading = false;
-      });
-      if (messages.length == 2) {
-        widget.onTitleUpdate(displayText.length > 40 ? displayText.substring(0, 40) + '...' : displayText);
-      }
+      req.fields['user_profile'] = jsonEncode({'name': prefs.getString('name') ?? '', 'age': prefs.getString('age') ?? '', 'weight': prefs.getString('weight') ?? '', 'height': prefs.getString('height') ?? '', 'level': prefs.getString('level') ?? '', 'goal': prefs.getString('goal') ?? ''});
+      if (vb != null && vn != null) req.files.add(http.MultipartFile.fromBytes('file', vb, filename: vn));
+      var res = await req.send();
+      var body = await res.stream.bytesToString();
+      final j = jsonDecode(body);
+      setState(() { messages.add({'role': 'assistant', 'content': j['response'] ?? '', 'video_filename': null}); isLoading = false; });
+      if (messages.length == 2) widget.onTitleUpdate(displayText.length > 40 ? '${displayText.substring(0, 40)}...' : displayText);
       widget.onMessageSent();
       _scrollToBottom();
-    } catch (e) {
-      setState(() {
-        messages.add({"role": "assistant", "content": "Erreur de connexion au serveur.", "video_filename": null});
-        isLoading = false;
-      });
+    } catch (_) {
+      setState(() { messages.add({'role': 'assistant', 'content': 'Erreur de connexion.', 'video_filename': null}); isLoading = false; });
     }
   }
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-      }
-    });
-  }
+  void _scrollToBottom() => Future.delayed(const Duration(milliseconds: 100), () { if (_scrollController.hasClients) _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut); });
 
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      Expanded(
-        child: messages.isEmpty && !isLoading
-            ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.chat_bubble_outline_rounded, size: 36, color: Colors.white.withOpacity(0.06)),
-                const SizedBox(height: 12),
-                Text("Pose une question ou envoie une vidéo", style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14)),
-              ]))
-            : ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-                itemCount: messages.length + (isLoading ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index == messages.length) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(children: [
-                        Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.psychology_rounded, size: 13, color: kOrange)),
-                        const SizedBox(width: 8),
-                        Text("Coach en train de réfléchir...", style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13)),
-                        const SizedBox(width: 8),
-                        const SizedBox(height: 13, width: 13, child: CircularProgressIndicator(strokeWidth: 1.5, color: kOrange)),
+      Expanded(child: messages.isEmpty && !isLoading
+        ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.chat_bubble_outline_rounded, size: 36, color: Colors.white.withOpacity(0.06)),
+            const SizedBox(height: 12),
+            Text('Pose une question ou envoie une vidéo', style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14)),
+          ]))
+        : ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            itemCount: messages.length + (isLoading ? 1 : 0),
+            itemBuilder: (context, i) {
+              if (i == messages.length) return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(children: [
+                  Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.psychology_rounded, size: 13, color: kOrange)),
+                  const SizedBox(width: 8),
+                  Text('Coach en train de réfléchir...', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 13)),
+                  const SizedBox(width: 8),
+                  const SizedBox(height: 13, width: 13, child: CircularProgressIndicator(strokeWidth: 1.5, color: kOrange)),
+                ]),
+              );
+              final msg = messages[i];
+              final isUser = msg['role'] == 'user';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (!isUser) ...[
+                      Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: kOrange.withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.psychology_rounded, size: 13, color: kOrange)),
+                      const SizedBox(width: 8),
+                    ],
+                    Flexible(child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isUser ? kOrange : kCard,
+                        borderRadius: BorderRadius.only(topLeft: const Radius.circular(16), topRight: const Radius.circular(16), bottomLeft: Radius.circular(isUser ? 16 : 4), bottomRight: Radius.circular(isUser ? 4 : 16)),
+                        border: isUser ? null : Border.all(color: kBorder),
+                      ),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        if (msg['video_filename'] != null && (msg['video_filename'] as String).isNotEmpty)
+                          Padding(padding: const EdgeInsets.only(bottom: 5), child: Row(children: [
+                            const Icon(Icons.videocam_rounded, size: 12, color: Colors.white70),
+                            const SizedBox(width: 4),
+                            Flexible(child: Text(msg['video_filename'] as String, style: const TextStyle(fontSize: 11, color: Colors.white70))),
+                          ])),
+                        isUser
+                          ? SelectableText(msg['content'] as String, style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.5))
+                          : SelectionArea(child: MarkdownBody(data: msg['content'] as String, styleSheet: MarkdownStyleSheet(
+                              p: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.85), height: 1.5),
+                              strong: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),
+                              tableHead: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                              tableBody: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13),
+                              tableBorder: TableBorder.all(color: Colors.white12),
+                            ))),
                       ]),
-                    );
-                  }
-                  final msg = messages[index];
-                  final isUser = msg['role'] == 'user';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (!isUser) ...[
-                          Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: kOrange.withOpacity(0.12), shape: BoxShape.circle), child: const Icon(Icons.psychology_rounded, size: 13, color: kOrange)),
-                          const SizedBox(width: 8),
-                        ],
-                        Flexible(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: isUser ? kOrange : kCard,
-                              borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(16), topRight: const Radius.circular(16),
-                                bottomLeft: Radius.circular(isUser ? 16 : 4),
-                                bottomRight: Radius.circular(isUser ? 4 : 16),
-                              ),
-                              border: isUser ? null : Border.all(color: kBorder),
-                            ),
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              if (msg['video_filename'] != null && (msg['video_filename'] as String).isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 5),
-                                  child: Row(children: [
-                                    const Icon(Icons.videocam_rounded, size: 12, color: Colors.white70),
-                                    const SizedBox(width: 4),
-                                    Flexible(child: Text(msg['video_filename'] as String, style: const TextStyle(fontSize: 11, color: Colors.white70))),
-                                  ]),
-                                ),
-                              isUser
-                                  ? SelectableText(msg['content'] as String, style: const TextStyle(fontSize: 14, color: Colors.white, height: 1.5))
-                                  : SelectionArea(child: MarkdownBody(
-                                      data: msg['content'] as String,
-                                      styleSheet: MarkdownStyleSheet(
-                                        p: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.85), height: 1.5),
-                                        strong: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),
-                                        listBullet: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.85)),
-                                        tableHead: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                        tableBody: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13),
-                                        tableBorder: TableBorder.all(color: Colors.white12),
-                                        tableColumnWidth: const FlexColumnWidth(),
-                                      ),
-                                    )),
-                            ]),
-                          ),
-                        ),
-                        if (isUser) const SizedBox(width: 8),
-                      ],
-                    ),
-                  );
-                },
-              ),
-      ),
+                    )),
+                    if (isUser) const SizedBox(width: 8),
+                  ],
+                ),
+              );
+            },
+          )),
       Container(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
-        decoration: BoxDecoration(color: const Color(0xFF111111), border: Border(top: BorderSide(color: kBorder))),
+        decoration: BoxDecoration(color: const Color(0xFF0D0D0D), border: Border(top: BorderSide(color: kBorder))),
         child: Column(children: [
-          if (pendingVideoName != null)
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              decoration: BoxDecoration(color: kOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: kOrange.withOpacity(0.2))),
-              child: Row(children: [
-                const Icon(Icons.videocam_rounded, size: 14, color: kOrange),
-                const SizedBox(width: 8),
-                Expanded(child: Text(pendingVideoName!, style: const TextStyle(fontSize: 12, color: Colors.white70))),
-                Clickable(onTap: () => setState(() { pendingVideoBytes = null; pendingVideoName = null; }), child: Icon(Icons.close_rounded, size: 14, color: Colors.white.withOpacity(0.3))),
-              ]),
-            ),
+          if (pendingVideoName != null) Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(color: kOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: kOrange.withOpacity(0.2))),
+            child: Row(children: [
+              const Icon(Icons.videocam_rounded, size: 14, color: kOrange),
+              const SizedBox(width: 8),
+              Expanded(child: Text(pendingVideoName!, style: const TextStyle(fontSize: 12, color: Colors.white70))),
+              Clickable(onTap: () => setState(() { pendingVideoBytes = null; pendingVideoName = null; }), child: Icon(Icons.close_rounded, size: 14, color: Colors.white.withOpacity(0.3))),
+            ]),
+          ),
           Row(children: [
             MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_rounded, color: kOrange, size: 20))),
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-                maxLines: 5, minLines: 1,
-                decoration: InputDecoration(
-                  hintText: "Pose une question à ton coach...",
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
-                  filled: true, fillColor: kCard2,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                onSubmitted: (_) => sendMessage(),
+            Expanded(child: TextField(
+              controller: _controller,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              maxLines: 5, minLines: 1,
+              decoration: InputDecoration(
+                hintText: 'Pose une question...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
+                filled: true, fillColor: kCard2,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
-            ),
+              onSubmitted: (_) => sendMessage(),
+            )),
             const SizedBox(width: 8),
-            Clickable(
-              onTap: () => sendMessage(),
-              child: Container(
-                padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(color: isLoading ? kOrange.withOpacity(0.3) : kOrange, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.send_rounded, color: Colors.white, size: 17),
-              ),
-            ),
+            Clickable(onTap: sendMessage, child: Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: isLoading ? kOrange.withOpacity(0.3) : kOrange, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 17))),
           ]),
         ]),
       ),
@@ -1333,59 +1104,973 @@ class _ChatViewState extends State<ChatView> {
   }
 }
 
-// ===================== PAGE PROFIL =====================
-
-class ProfilePage extends StatefulWidget {
+// ===================== TRAINING PAGE V2 =====================
+class TrainingPageV2 extends StatelessWidget {
   final Map<String, String> userData;
-  final String deviceId;
-  const ProfilePage({super.key, required this.userData, required this.deviceId});
+  const TrainingPageV2({super.key, required this.userData});
+
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  Widget build(BuildContext context) {
+    return SafeArea(bottom: false, child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Training', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText)),
+        const SizedBox(height: 4),
+        Text('Ton hub d\'entraînement', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
+        const SizedBox(height: 28),
+        // 3 grands widgets hub
+        _hubCard(
+          context,
+          icon: Icons.grid_view_rounded,
+          color: kOrange,
+          title: 'Programmes prédéfinis',
+          description: 'PPL, Full Body, Force, Hypertrophie...',
+          tag: '5 programmes',
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProgramsPage())),
+        ),
+        const SizedBox(height: 14),
+        _hubCard(
+          context,
+          icon: Icons.menu_book_rounded,
+          color: kBlue,
+          title: 'Bibliothèque d\'exercices',
+          description: 'Tous les exercices de la salle avec fiches complètes',
+          tag: '${mockExercises.length} exercices',
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExerciseLibraryPage())),
+        ),
+        const SizedBox(height: 14),
+        _hubCard(
+          context,
+          icon: Icons.auto_awesome_rounded,
+          color: kPurple,
+          title: 'Programmes IA',
+          description: 'Programmes générés par ton coach IA',
+          tag: 'Personnalisé',
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIProgramsPage())),
+        ),
+      ]),
+    ));
+  }
+
+  Widget _hubCard(BuildContext context, {required IconData icon, required Color color, required String title, required String description, required String tag, required VoidCallback onTap}) {
+    return Clickable(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: color.withOpacity(0.2)),
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.06), Colors.transparent]),
+        ),
+        child: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(16)),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kText)),
+            const SizedBox(height: 4),
+            Text(description, style: const TextStyle(fontSize: 12, color: kTextDim, height: 1.4)),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              child: Text(tag, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+            ),
+          ])),
+          Icon(Icons.arrow_forward_ios_rounded, color: color.withOpacity(0.5), size: 16),
+        ]),
+      ),
+    );
+  }
 }
 
-class _ProfilePageState extends State<ProfilePage> {
-  final _nameController = TextEditingController();
-  final _ageController = TextEditingController();
-  final _weightController = TextEditingController();
-  final _heightController = TextEditingController();
-  final _goalController = TextEditingController();
-  String selectedLevel = "debutant";
+// ===================== PROGRAMS PAGE =====================
+class ProgramsPage extends StatelessWidget {
+  const ProgramsPage({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(backgroundColor: kBg, title: const Text('Programmes prédéfinis', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)), iconTheme: const IconThemeData(color: kText), elevation: 0),
+      body: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        itemCount: mockPrograms.length,
+        itemBuilder: (context, i) {
+          final p = mockPrograms[i];
+          return Clickable(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProgramDetailPage(program: p))),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: (p['color'] as Color).withOpacity(0.2))),
+              child: Row(children: [
+                Container(
+                  width: 54, height: 54,
+                  decoration: BoxDecoration(color: (p['color'] as Color).withOpacity(0.12), borderRadius: BorderRadius.circular(14)),
+                  child: Center(child: Icon(Icons.fitness_center_rounded, color: p['color'] as Color, size: 24)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(p['name'] as String, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+                  const SizedBox(height: 4),
+                  Text('${p['goal']} · ${p['duration']}', style: const TextStyle(fontSize: 12, color: kTextDim)),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    _tag(p['difficulty'] as String, p['color'] as Color),
+                    const SizedBox(width: 6),
+                    _tag(p['sessions'] as String, kCard3),
+                  ]),
+                ])),
+                Icon(Icons.arrow_forward_ios_rounded, color: (p['color'] as Color).withOpacity(0.5), size: 14),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _tag(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+    child: Text(text, style: TextStyle(fontSize: 10, color: color == kCard3 ? kTextMid : color, fontWeight: FontWeight.w600)),
+  );
+}
+
+// ===================== PROGRAM DETAIL PAGE =====================
+class ProgramDetailPage extends StatelessWidget {
+  final Map<String, dynamic> program;
+  const ProgramDetailPage({super.key, required this.program});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = program['color'] as Color;
+    final sessions = [
+      {'name': 'Séance A — Push', 'exercises': ['Développé couché', 'Développé militaire', 'Triceps poulie']},
+      {'name': 'Séance B — Pull', 'exercises': ['Tractions', 'Rowing barre', 'Curl biceps']},
+      {'name': 'Séance C — Legs', 'exercises': ['Squat', 'Leg press', 'Hip thrust']},
+    ];
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(backgroundColor: kBg, title: Text(program['name'] as String, style: const TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)), iconTheme: const IconThemeData(color: kText), elevation: 0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(18), border: Border.all(color: color.withOpacity(0.2))),
+            child: Row(children: [
+              Icon(Icons.info_outline_rounded, color: color, size: 18),
+              const SizedBox(width: 10),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('${program['goal']} · ${program['duration']} · ${program['sessions']}', style: const TextStyle(fontSize: 13, color: kTextMid)),
+                Text('Difficulté : ${program['difficulty']}', style: TextStyle(fontSize: 12, color: color)),
+              ])),
+            ]),
+          ),
+          const SizedBox(height: 24),
+          const Text('SÉANCES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          ...sessions.map((s) => Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(s['name'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+              const SizedBox(height: 10),
+              ...(s['exercises'] as List<String>).map((e) => Clickable(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ExerciseDetailPage(exercise: mockExercises.firstWhere((ex) => ex['name'] == e, orElse: () => {'name': e, 'muscle': '--', 'type': '--', 'difficulty': '--', 'icon': '💪', 'color': kOrange})))),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(10)),
+                  child: Row(children: [
+                    const Icon(Icons.fitness_center_rounded, size: 14, color: kOrange),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(e, style: const TextStyle(fontSize: 13, color: kText))),
+                    const Text('4×8', style: TextStyle(fontSize: 11, color: kTextDim)),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: kTextDim),
+                  ]),
+                ),
+              )).toList(),
+            ]),
+          )).toList(),
+        ]),
+      ),
+    );
+  }
+}
+
+// ===================== EXERCISE LIBRARY PAGE =====================
+class ExerciseLibraryPage extends StatefulWidget {
+  const ExerciseLibraryPage({super.key});
+  @override
+  State<ExerciseLibraryPage> createState() => _ExerciseLibraryPageState();
+}
+
+class _ExerciseLibraryPageState extends State<ExerciseLibraryPage> {
+  String _search = '';
+  String _filterMuscle = 'Tous';
+  String _filterType = 'Tous';
+
+  List<Map<String, dynamic>> get filtered {
+    return mockExercises.where((e) {
+      final matchSearch = _search.isEmpty || (e['name'] as String).toLowerCase().contains(_search.toLowerCase());
+      final matchMuscle = _filterMuscle == 'Tous' || e['muscle'] == _filterMuscle;
+      final matchType = _filterType == 'Tous' || e['type'] == _filterType;
+      return matchSearch && matchMuscle && matchType;
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final muscles = ['Tous', ...mockExercises.map((e) => e['muscle'] as String).toSet().toList()];
+    final types = ['Tous', 'Poids libre', 'Machine', 'Poids du corps'];
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(backgroundColor: kBg, title: const Text('Bibliothèque d\'exercices', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)), iconTheme: const IconThemeData(color: kText), elevation: 0),
+      body: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Column(children: [
+            TextField(
+              onChanged: (v) => setState(() => _search = v),
+              style: const TextStyle(color: kText, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: 'Rechercher un exercice...', hintStyle: const TextStyle(color: kTextDim, fontSize: 14),
+                prefixIcon: const Icon(Icons.search_rounded, color: kTextDim, size: 20),
+                filled: true, fillColor: kCard,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+              ...muscles.map((m) => Clickable(
+                onTap: () => setState(() => _filterMuscle = m),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: _filterMuscle == m ? kOrange : kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: _filterMuscle == m ? kOrange : kBorder)),
+                  child: Text(m, style: TextStyle(fontSize: 12, color: _filterMuscle == m ? Colors.white : kTextMid, fontWeight: _filterMuscle == m ? FontWeight.w600 : FontWeight.normal)),
+                ),
+              )).toList(),
+            ])),
+            const SizedBox(height: 8),
+            SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
+              ...types.map((t) => Clickable(
+                onTap: () => setState(() => _filterType = t),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: _filterType == t ? kBlue : kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: _filterType == t ? kBlue : kBorder)),
+                  child: Text(t, style: TextStyle(fontSize: 12, color: _filterType == t ? Colors.white : kTextMid, fontWeight: _filterType == t ? FontWeight.w600 : FontWeight.normal)),
+                ),
+              )).toList(),
+            ])),
+          ]),
+        ),
+        const SizedBox(height: 8),
+        Expanded(child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+          itemCount: filtered.length,
+          itemBuilder: (context, i) {
+            final ex = filtered[i];
+            return Clickable(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ExerciseDetailPage(exercise: ex))),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+                child: Row(children: [
+                  Container(
+                    width: 44, height: 44,
+                    decoration: BoxDecoration(color: (ex['color'] as Color).withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                    child: Center(child: Text(ex['icon'] as String, style: const TextStyle(fontSize: 20))),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(ex['name'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+                    const SizedBox(height: 3),
+                    Text('${ex['muscle']} · ${ex['type']}', style: const TextStyle(fontSize: 12, color: kTextDim)),
+                  ])),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: (ex['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                    child: Text(ex['difficulty'] as String, style: TextStyle(fontSize: 10, color: ex['color'] as Color, fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: kTextDim),
+                ]),
+              ),
+            );
+          },
+        )),
+      ]),
+    );
+  }
+}
+
+// ===================== EXERCISE DETAIL PAGE =====================
+class ExerciseDetailPage extends StatelessWidget {
+  final Map<String, dynamic> exercise;
+  const ExerciseDetailPage({super.key, required this.exercise});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = exercise['color'] as Color? ?? kOrange;
+    final steps = [
+      'Mets-toi en position de départ, pieds écartés à la largeur des épaules.',
+      'Engage le gainage abdominal et garde le dos droit.',
+      'Effectue le mouvement de manière contrôlée en inspirant.',
+      'Atteins la position basse optimale.',
+      'Remonte de manière explosive en expirant.',
+      'Répète le mouvement pour le nombre de répétitions prescrit.',
+    ];
+    return Scaffold(
+      backgroundColor: kBg,
+      body: CustomScrollView(slivers: [
+        SliverAppBar(
+          backgroundColor: kBg,
+          expandedHeight: 180,
+          pinned: true,
+          iconTheme: const IconThemeData(color: kText),
+          flexibleSpace: FlexibleSpaceBar(
+            background: Container(
+              decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.2), kBg])),
+              child: Center(child: Text(exercise['icon'] as String? ?? '💪', style: const TextStyle(fontSize: 80))),
+            ),
+          ),
+          title: Text(exercise['name'] as String, style: const TextStyle(color: kText, fontSize: 16, fontWeight: FontWeight.bold)),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          sliver: SliverList(delegate: SliverChildListDelegate([
+            // Tags
+            Row(children: [
+              _tag(exercise['muscle'] as String, color),
+              const SizedBox(width: 8),
+              _tag(exercise['type'] as String, kCard3),
+              const SizedBox(width: 8),
+              _tag(exercise['difficulty'] as String, kCard3),
+            ]),
+            const SizedBox(height: 24),
+            // Description
+            const Text('DESCRIPTION', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            Text('Le ${exercise['name']} est un exercice fondamental ciblant principalement les ${exercise['muscle']}. C\'est un mouvement polyarticulaire qui engage plusieurs groupes musculaires simultanément pour des gains optimaux.', style: const TextStyle(fontSize: 14, color: kTextMid, height: 1.6)),
+            const SizedBox(height: 24),
+            // Étapes
+            const Text('ÉTAPES D\'EXÉCUTION', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            ...steps.asMap().entries.map((e) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 24, height: 24,
+                  decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+                  child: Center(child: Text('${e.key + 1}', style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.bold))),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(e.value, style: const TextStyle(fontSize: 13, color: kTextMid, height: 1.5))),
+              ]),
+            )).toList(),
+            const SizedBox(height: 24),
+            // Vidéo placeholder
+            const Text('VIDÉO DÉMO', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            Container(
+              height: 160,
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.play_circle_outline_rounded, size: 48, color: color.withOpacity(0.5)),
+                const SizedBox(height: 8),
+                Text('Vidéo disponible prochainement', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.3))),
+              ]),
+            ),
+            const SizedBox(height: 24),
+            // Analyse IA
+            const Text('ANALYSE IA', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: kOrange.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kOrange.withOpacity(0.2)),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.psychology_rounded, color: kOrange, size: 18),
+                  const SizedBox(width: 8),
+                  const Text('Analyse ton mouvement en temps réel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+                ]),
+                const SizedBox(height: 8),
+                const Text('Filme-toi pendant l\'exercice et reçois un feedback IA instantané sur ta technique.', style: TextStyle(fontSize: 12, color: kTextDim, height: 1.5)),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.videocam_rounded, size: 16),
+                    label: const Text('Analyser mon mouvement', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Row(children: [
+                  Icon(Icons.lightbulb_outline_rounded, color: kYellow, size: 16),
+                  SizedBox(width: 8),
+                  Text('Conseils IA', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+                ]),
+                const SizedBox(height: 8),
+                Text('Concentre-toi sur la qualité d\'exécution plutôt que la charge. Assure-toi de bien contrôler la phase excentrique pour maximiser les gains musculaires.', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6), height: 1.5)),
+              ]),
+            ),
+          ])),
+        ),
+      ]),
+    );
+  }
+
+  Widget _tag(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(color: color == kCard3 ? kCard3 : color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+    child: Text(text, style: TextStyle(fontSize: 11, color: color == kCard3 ? kTextMid : color, fontWeight: FontWeight.w600)),
+  );
+}
+
+// ===================== AI PROGRAMS PAGE =====================
+class AIProgramsPage extends StatelessWidget {
+  const AIProgramsPage({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(backgroundColor: kBg, title: const Text('Programmes IA', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)), iconTheme: const IconThemeData(color: kText), elevation: 0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        child: Column(children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: kPurple.withOpacity(0.08), borderRadius: BorderRadius.circular(18), border: Border.all(color: kPurple.withOpacity(0.2))),
+            child: Column(children: [
+              const Icon(Icons.auto_awesome_rounded, color: kPurple, size: 32),
+              const SizedBox(height: 12),
+              const Text('Génère ton programme IA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kText)),
+              const SizedBox(height: 6),
+              Text('Dis à ton coach IA tes objectifs et il créera un programme sur mesure.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5), height: 1.5)),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.psychology_rounded, size: 16),
+                label: const Text('Demander au Coach IA', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(backgroundColor: kPurple, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 24),
+          Align(alignment: Alignment.centerLeft, child: Text('MES PROGRAMMES', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3), fontWeight: FontWeight.w600, letterSpacing: 1.2))),
+          const SizedBox(height: 16),
+          Center(child: Text('Aucun programme généré pour l\'instant.\nDemande à ton coach IA de créer le tien !', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.2), height: 1.6))),
+        ]),
+      ),
+    );
+  }
+}
+
+// ===================== NUTRITION PAGE V2 =====================
+class NutritionPageV2 extends StatelessWidget {
+  final Map<String, String> userData;
+  const NutritionPageV2({super.key, required this.userData});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(bottom: false, child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Nutrition', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText)),
+        const SizedBox(height: 4),
+        Text('Alimentation & Recettes', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
+        const SizedBox(height: 24),
+        // Calories du jour
+        _buildCaloriesCard(),
+        const SizedBox(height: 20),
+        // 2 grands widgets
+        _hubCard(context, icon: Icons.restaurant_rounded, color: kGreen, title: 'Recettes prédéfinies', description: 'Repas équilibrés adaptés à tes objectifs', tag: '${mockRecipes.length} recettes', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RecipesPage()))),
+        const SizedBox(height: 14),
+        _hubCard(context, icon: Icons.auto_awesome_rounded, color: kOrange, title: 'Plans nutrition IA', description: 'Plans alimentaires générés par ton coach IA', tag: 'Personnalisé', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AINutritionPage()))),
+      ]),
+    ));
+  }
+
+  Widget _buildCaloriesCard() {
+    const target = 2400;
+    const consumed = 1200;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
+      child: Column(children: [
+        Row(children: [
+          const Text("AUJOURD'HUI", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const Spacer(),
+          const Text('$consumed / $target kcal', style: TextStyle(fontSize: 13, color: kTextMid)),
+        ]),
+        const SizedBox(height: 12),
+        ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: consumed / target, backgroundColor: kBorder, valueColor: const AlwaysStoppedAnimation(kGreen), minHeight: 8)),
+        const SizedBox(height: 14),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+          _macro('Protéines', '87g', kGreen),
+          _macro('Glucides', '120g', kBlue),
+          _macro('Lipides', '42g', kYellow),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _macro(String label, String value, Color color) => Column(children: [
+    Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+    const SizedBox(height: 2),
+    Text(label, style: const TextStyle(fontSize: 11, color: kTextDim)),
+  ]);
+
+  Widget _hubCard(BuildContext context, {required IconData icon, required Color color, required String title, required String description, required String tag, required VoidCallback onTap}) {
+    return Clickable(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.2)), gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.05), Colors.transparent])),
+        child: Row(children: [
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: color, size: 24)),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+            const SizedBox(height: 3),
+            Text(description, style: const TextStyle(fontSize: 12, color: kTextDim)),
+            const SizedBox(height: 6),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)), child: Text(tag, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600))),
+          ])),
+          Icon(Icons.arrow_forward_ios_rounded, color: color.withOpacity(0.5), size: 14),
+        ]),
+      ),
+    );
+  }
+}
+
+// ===================== RECIPES PAGE =====================
+class RecipesPage extends StatelessWidget {
+  const RecipesPage({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final meals = ['Petit déjeuner', 'Déjeuner', 'Snack', 'Dîner'];
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(backgroundColor: kBg, title: const Text('Recettes', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)), iconTheme: const IconThemeData(color: kText), elevation: 0),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        children: meals.map((meal) {
+          final recipes = mockRecipes.where((r) => r['meal'] == meal).toList();
+          if (recipes.isEmpty) return const SizedBox();
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(meal.toUpperCase(), style: const TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2))),
+            ...recipes.map((r) => Clickable(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecipeDetailPage(recipe: r))),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+                child: Row(children: [
+                  Container(width: 48, height: 48, decoration: BoxDecoration(color: (r['color'] as Color).withOpacity(0.12), borderRadius: BorderRadius.circular(12)), child: Center(child: Text(r['icon'] as String, style: const TextStyle(fontSize: 24)))),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(r['name'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+                    const SizedBox(height: 3),
+                    Text('${r['calories']} kcal · ${r['protein']}g protéines · ${r['time']}', style: const TextStyle(fontSize: 12, color: kTextDim)),
+                  ])),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: kTextDim),
+                ]),
+              ),
+            )).toList(),
+          ]);
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ===================== RECIPE DETAIL PAGE =====================
+class RecipeDetailPage extends StatelessWidget {
+  final Map<String, dynamic> recipe;
+  const RecipeDetailPage({super.key, required this.recipe});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = recipe['color'] as Color;
+    final ingredients = ['200g de blanc de poulet', '150g de riz', '2 œufs', '1 poignée d\'épinards', 'Sel, poivre, épices'];
+    final steps = ['Préparer tous les ingrédients.', 'Cuire le riz selon les instructions.', 'Faire revenir le poulet avec les épices.', 'Mélanger et servir chaud.'];
+    return Scaffold(
+      backgroundColor: kBg,
+      body: CustomScrollView(slivers: [
+        SliverAppBar(
+          backgroundColor: kBg,
+          expandedHeight: 160,
+          pinned: true,
+          iconTheme: const IconThemeData(color: kText),
+          flexibleSpace: FlexibleSpaceBar(
+            background: Container(
+              decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [color.withOpacity(0.2), kBg])),
+              child: Center(child: Text(recipe['icon'] as String, style: const TextStyle(fontSize: 72))),
+            ),
+          ),
+          title: Text(recipe['name'] as String, style: const TextStyle(color: kText, fontSize: 16, fontWeight: FontWeight.bold)),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          sliver: SliverList(delegate: SliverChildListDelegate([
+            // Macros
+            Row(children: [
+              _macro('Calories', '${recipe['calories']} kcal', color),
+              const SizedBox(width: 10),
+              _macro('Protéines', '${recipe['protein']}g', kGreen),
+              const SizedBox(width: 10),
+              _macro('Temps', recipe['time'] as String, kBlue),
+            ]),
+            const SizedBox(height: 24),
+            // Pourquoi adaptée
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withOpacity(0.2))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [Icon(Icons.auto_awesome_rounded, color: color, size: 16), const SizedBox(width: 8), const Text('Pourquoi cette recette ?', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText))]),
+                const SizedBox(height: 8),
+                Text('Cette recette est adaptée à ton objectif car elle apporte un ratio optimal de protéines et de glucides pour la récupération musculaire après l\'entraînement.', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6), height: 1.5)),
+              ]),
+            ),
+            const SizedBox(height: 20),
+            const Text('INGRÉDIENTS', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            ...ingredients.map((ing) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(children: [
+                Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                const SizedBox(width: 10),
+                Text(ing, style: const TextStyle(fontSize: 13, color: kTextMid)),
+              ]),
+            )).toList(),
+            const SizedBox(height: 20),
+            const Text('PRÉPARATION', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 10),
+            ...steps.asMap().entries.map((e) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12)),
+              child: Row(children: [
+                Container(width: 24, height: 24, decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle), child: Center(child: Text('${e.key + 1}', style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.bold)))),
+                const SizedBox(width: 10),
+                Expanded(child: Text(e.value, style: const TextStyle(fontSize: 13, color: kTextMid))),
+              ]),
+            )).toList(),
+            const SizedBox(height: 16),
+            Container(height: 140, decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.play_circle_outline_rounded, size: 40, color: color.withOpacity(0.5)),
+              const SizedBox(height: 6),
+              Text('Vidéo disponible prochainement', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.3))),
+            ])),
+          ])),
+        ),
+      ]),
+    );
+  }
+
+  Widget _macro(String label, String value, Color color) => Expanded(child: Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+    child: Column(children: [
+      Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+      const SizedBox(height: 2),
+      Text(label, style: const TextStyle(fontSize: 10, color: kTextDim)),
+    ]),
+  ));
+}
+
+// ===================== AI NUTRITION PAGE =====================
+class AINutritionPage extends StatelessWidget {
+  const AINutritionPage({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(backgroundColor: kBg, title: const Text('Plans nutrition IA', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)), iconTheme: const IconThemeData(color: kText), elevation: 0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        child: Column(children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: kOrange.withOpacity(0.08), borderRadius: BorderRadius.circular(18), border: Border.all(color: kOrange.withOpacity(0.2))),
+            child: Column(children: [
+              const Icon(Icons.restaurant_rounded, color: kOrange, size: 32),
+              const SizedBox(height: 12),
+              const Text('Plan nutritionnel IA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kText)),
+              const SizedBox(height: 6),
+              Text('Ton coach IA crée un plan alimentaire sur mesure basé sur ton profil et tes objectifs.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5), height: 1.5)),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.auto_awesome_rounded, size: 16),
+                label: const Text('Générer mon plan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ===================== PROGRESS PAGE V2 =====================
+class ProgressPageV2 extends StatelessWidget {
+  final Map<String, String> userData;
+  const ProgressPageV2({super.key, required this.userData});
+
+  @override
+  Widget build(BuildContext context) {
+    final squat = userData['squat_weight'] ?? '--';
+    final bench = userData['bench_weight'] ?? '--';
+    final deadlift = userData['deadlift_weight'] ?? '--';
+    final weight = userData['weight'] ?? '--';
+    final sessions = userData['sessions_per_week'] ?? '--';
+    final streak = userData['streak'] ?? '--';
+    final lastScore = userData['last_squat_score'] ?? '--';
+    final goal = userData['goal'] ?? '';
+
+    final analyses = [
+      {'exercise': 'Squat', 'score': 85, 'date': '12/05', 'icon': '🦵', 'color': kOrange},
+      {'exercise': 'Développé couché', 'score': 72, 'date': '10/05', 'icon': '💪', 'color': kBlue},
+      {'exercise': 'Deadlift', 'score': 90, 'date': '08/05', 'icon': '⚡', 'color': kPurple},
+    ];
+
+    return SafeArea(bottom: false, child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Progression', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText)),
+        const SizedBox(height: 4),
+        Text('Tes performances', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
+        const SizedBox(height: 24),
+
+        // Stats rapides
+        const Text('STATS RAPIDES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+        const SizedBox(height: 12),
+        GridView.count(
+          crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.6,
+          children: [
+            _statCard('Poids', '$weight kg', Icons.monitor_weight_outlined, Colors.blue),
+            _statCard('Séances', '$sessions/sem', Icons.bolt_rounded, kOrange),
+            _statCard('Streak', '$streak jours 🔥', Icons.local_fire_department_rounded, kYellow),
+            _statCard('Score', '$lastScore/100', Icons.analytics_rounded, kGreen),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        // Charges
+        const Text('MES CHARGES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
+          child: Column(children: [
+            _exerciseBar('Squat', squat != '--' ? '$squat kg' : 'Non renseigné', squat != '--' ? (double.tryParse(squat) ?? 0) / 200 : 0.3, kOrange),
+            _exerciseBar('Développé couché', bench != '--' ? '$bench kg' : 'Non renseigné', bench != '--' ? (double.tryParse(bench) ?? 0) / 150 : 0.3, kBlue),
+            _exerciseBar('Soulevé de terre', deadlift != '--' ? '$deadlift kg' : 'Non renseigné', deadlift != '--' ? (double.tryParse(deadlift) ?? 0) / 250 : 0.3, kPurple),
+          ]),
+        ),
+        const SizedBox(height: 24),
+
+        // Streak calendar
+        const Text('CALENDRIER STREAK', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+        const SizedBox(height: 12),
+        _buildStreakCalendar(),
+        const SizedBox(height: 24),
+
+        // Historique analyses IA
+        const Text('HISTORIQUE ANALYSES IA', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+        const SizedBox(height: 12),
+        ...analyses.map((a) {
+          final score = a['score'] as int;
+          final color = score >= 80 ? kGreen : score >= 60 ? kOrange : kRed;
+          return Clickable(
+            onTap: () {},
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withOpacity(0.15))),
+              child: Row(children: [
+                Container(width: 44, height: 44, decoration: BoxDecoration(color: (a['color'] as Color).withOpacity(0.12), borderRadius: BorderRadius.circular(12)), child: Center(child: Text(a['icon'] as String, style: const TextStyle(fontSize: 20)))),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(a['exercise'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+                  Text(a['date'] as String, style: const TextStyle(fontSize: 12, color: kTextDim)),
+                ])),
+                Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+                  child: Center(child: Text('$score', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color))),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: kTextDim),
+              ]),
+            ),
+          );
+        }).toList(),
+        const SizedBox(height: 24),
+
+        // Bilan IA global
+        const Text('BILAN IA GLOBAL', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kOrange.withOpacity(0.2))),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.auto_awesome_rounded, color: kOrange, size: 18)),
+              const SizedBox(width: 10),
+              const Text('Analyse IA', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+            ]),
+            const SizedBox(height: 12),
+            Text(goal.isNotEmpty ? 'Objectif : $goal. Continue à travailler et parle à ton coach pour un bilan complet !' : 'Génère un bilan IA complet de tes performances de la semaine.', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.55), height: 1.6)),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.psychology_rounded, size: 16),
+                label: const Text('Générer mon bilan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+              ),
+            ),
+          ]),
+        ),
+      ]),
+    ));
+  }
+
+  Widget _statCard(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: color, size: 20),
+        const Spacer(),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kText), overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 2),
+        Text(label, style: const TextStyle(fontSize: 11, color: kTextDim)),
+      ]),
+    );
+  }
+
+  Widget _exerciseBar(String name, String value, double progress, Color color) {
+    return Container(margin: const EdgeInsets.only(bottom: 14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Text(name, style: const TextStyle(fontSize: 13, color: kText, fontWeight: FontWeight.w500)),
+        const Spacer(),
+        Text(value, style: const TextStyle(fontSize: 13, color: kTextDim)),
+      ]),
+      const SizedBox(height: 6),
+      ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: progress.clamp(0.0, 1.0), backgroundColor: kBorder, valueColor: AlwaysStoppedAnimation(color), minHeight: 6)),
+    ]));
+  }
+
+  Widget _buildStreakCalendar() {
+    final days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+    final weeks = [
+      [true, true, false, true, true, false, false],
+      [true, false, true, true, false, true, false],
+      [false, true, true, false, true, true, true],
+      [true, true, false, true, false, false, false],
+    ];
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
+      child: Column(children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: days.map((d) => SizedBox(width: 28, child: Text(d, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: kTextDim, fontWeight: FontWeight.w600)))).toList()),
+        const SizedBox(height: 8),
+        ...weeks.map((week) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: week.map((done) => AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            width: 28, height: 28,
+            decoration: BoxDecoration(
+              color: done ? kOrange : kCard2,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: done ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null,
+          )).toList()),
+        )).toList(),
+      ]),
+    );
+  }
+}
+
+// ===================== PROFILE PAGE V2 =====================
+class ProfilePageV2 extends StatefulWidget {
+  final Map<String, String> userData;
+  final String deviceId;
+  const ProfilePageV2({super.key, required this.userData, required this.deviceId});
+  @override
+  State<ProfilePageV2> createState() => _ProfilePageV2State();
+}
+
+class _ProfilePageV2State extends State<ProfilePageV2> {
+  final _nameCtrl = TextEditingController();
+  final _ageCtrl = TextEditingController();
+  final _weightCtrl = TextEditingController();
+  final _heightCtrl = TextEditingController();
+  final _goalCtrl = TextEditingController();
+  String selectedLevel = 'debutant';
   bool saved = false;
 
   final levels = [
-    {"key": "debutant", "label": "Débutant"},
-    {"key": "intermediaire", "label": "Intermédiaire"},
-    {"key": "avance", "label": "Avancé"},
+    {'key': 'debutant', 'label': 'Débutant'},
+    {'key': 'intermediaire', 'label': 'Inter.'},
+    {'key': 'avance', 'label': 'Avancé'},
   ];
 
   @override
   void initState() {
     super.initState();
-    _nameController.text = widget.userData['name'] ?? '';
-    _ageController.text = widget.userData['age'] ?? '';
-    _weightController.text = widget.userData['weight'] ?? '';
-    _heightController.text = widget.userData['height'] ?? '';
-    _goalController.text = widget.userData['goal'] ?? '';
+    _nameCtrl.text = widget.userData['name'] ?? '';
+    _ageCtrl.text = widget.userData['age'] ?? '';
+    _weightCtrl.text = widget.userData['weight'] ?? '';
+    _heightCtrl.text = widget.userData['height'] ?? '';
+    _goalCtrl.text = widget.userData['goal'] ?? '';
     selectedLevel = widget.userData['level']?.isNotEmpty == true ? widget.userData['level']! : 'debutant';
   }
 
   Future<void> saveProfile() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('name', _nameController.text);
-    await prefs.setString('age', _ageController.text);
-    await prefs.setString('weight', _weightController.text);
-    await prefs.setString('height', _heightController.text);
-    await prefs.setString('goal', _goalController.text);
+    await prefs.setString('name', _nameCtrl.text);
+    await prefs.setString('age', _ageCtrl.text);
+    await prefs.setString('weight', _weightCtrl.text);
+    await prefs.setString('height', _heightCtrl.text);
+    await prefs.setString('goal', _goalCtrl.text);
     await prefs.setString('level', selectedLevel);
-
-    final data = {
-      'name': _nameController.text,
-      'age': _ageController.text,
-      'weight': _weightController.text,
-      'height': _heightController.text,
-      'goal': _goalController.text,
-      'level': selectedLevel,
-    };
+    final data = {'name': _nameCtrl.text, 'age': _ageCtrl.text, 'weight': _weightCtrl.text, 'height': _heightCtrl.text, 'goal': _goalCtrl.text, 'level': selectedLevel};
     var request = http.MultipartRequest('PUT', Uri.parse('$kBaseUrl/user-data/'));
     request.headers['x-device-id'] = widget.deviceId;
     request.fields['data'] = jsonEncode(data);
@@ -1394,12 +2079,12 @@ class _ProfilePageState extends State<ProfilePage> {
     Future.delayed(const Duration(seconds: 1), () { if (mounted) Navigator.pop(context); });
   }
 
-  Widget _field(String label, TextEditingController controller, {String? hint, TextInputType? type}) {
+  Widget _field(String label, TextEditingController ctrl, {String? hint, TextInputType? type}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF666666), fontWeight: FontWeight.w600, letterSpacing: 0.8)),
       const SizedBox(height: 6),
       TextField(
-        controller: controller, keyboardType: type,
+        controller: ctrl, keyboardType: type,
         style: const TextStyle(color: kText, fontSize: 14),
         decoration: InputDecoration(
           hintText: hint, hintStyle: const TextStyle(color: Color(0xFF444444), fontSize: 14),
@@ -1410,7 +2095,7 @@ class _ProfilePageState extends State<ProfilePage> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         ),
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: 14),
     ]);
   }
 
@@ -1423,21 +2108,21 @@ class _ProfilePageState extends State<ProfilePage> {
           Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.person_rounded, color: kOrange, size: 20)),
           const SizedBox(width: 12),
           const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text("Mon profil", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
-            Text("Le coach adapte ses conseils à ton profil", style: TextStyle(fontSize: 12, color: kTextDim)),
+            Text('Mon profil', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
+            Text('Le coach adapte ses conseils à ton profil', style: TextStyle(fontSize: 12, color: kTextDim)),
           ])),
           Clickable(onTap: () => Navigator.pop(context), child: const Icon(Icons.close_rounded, color: Color(0xFF555555), size: 20)),
         ]),
         const SizedBox(height: 24),
-        _field("PRÉNOM", _nameController, hint: "Ex: Thomas"),
+        _field('PRÉNOM', _nameCtrl, hint: 'Ex: Thomas'),
         Row(children: [
-          Expanded(child: _field("ÂGE", _ageController, hint: "25", type: TextInputType.number)),
+          Expanded(child: _field('ÂGE', _ageCtrl, hint: '25', type: TextInputType.number)),
           const SizedBox(width: 12),
-          Expanded(child: _field("POIDS (kg)", _weightController, hint: "80", type: TextInputType.number)),
+          Expanded(child: _field('POIDS (kg)', _weightCtrl, hint: '80', type: TextInputType.number)),
           const SizedBox(width: 12),
-          Expanded(child: _field("TAILLE (cm)", _heightController, hint: "180", type: TextInputType.number)),
+          Expanded(child: _field('TAILLE (cm)', _heightCtrl, hint: '180', type: TextInputType.number)),
         ]),
-        const Text("NIVEAU", style: TextStyle(fontSize: 11, color: Color(0xFF666666), fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+        const Text('NIVEAU', style: TextStyle(fontSize: 11, color: Color(0xFF666666), fontWeight: FontWeight.w600, letterSpacing: 0.8)),
         const SizedBox(height: 8),
         Row(children: levels.map((l) {
           final isSelected = selectedLevel == l['key'];
@@ -1448,18 +2133,18 @@ class _ProfilePageState extends State<ProfilePage> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(color: isSelected ? kOrange : kCard2, borderRadius: BorderRadius.circular(10), border: Border.all(color: isSelected ? kOrange : kBorder)),
-              child: Text(l['label']!, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : const Color(0xFF666666), fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
+              child: Text(l['label']!, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : const Color(0xFF666666), fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
             ),
           ));
         }).toList()),
-        const SizedBox(height: 16),
-        _field("OBJECTIF PRINCIPAL", _goalController, hint: "Ex: Prendre de la masse, perdre du poids..."),
+        const SizedBox(height: 14),
+        _field('OBJECTIF PRINCIPAL', _goalCtrl, hint: 'Ex: Prendre de la masse, perdre du poids...'),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: saveProfile,
-            style: ElevatedButton.styleFrom(backgroundColor: saved ? const Color(0xFF4CAF50) : kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
-            child: Text(saved ? "✓ Sauvegardé !" : "Sauvegarder", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(backgroundColor: saved ? kGreen : kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
+            child: Text(saved ? '✓ Sauvegardé !' : 'Sauvegarder', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
           ),
         ),
       ]),

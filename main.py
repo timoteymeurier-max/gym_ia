@@ -65,7 +65,27 @@ class UserData(Base):
     value = Column(Text)
     updated_at = Column(DateTime, default=datetime.now)
 
+
+class AIProgram(Base):
+    __tablename__ = "ai_programs"
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String, default="default")
+    title = Column(String)
+    objective = Column(String)
+    content = Column(Text)
+    created_at = Column(DateTime, default=datetime.now)
+
+class AINutritionPlan(Base):
+    __tablename__ = "ai_nutrition_plans"
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String, default="default")
+    title = Column(String)
+    objective = Column(String)
+    content = Column(Text)
+    created_at = Column(DateTime, default=datetime.now)
+
 Base.metadata.create_all(engine)
+
 DBSession = sessionmaker(bind=engine)
 
 # Migration : ajout colonne device_id si elle n'existe pas
@@ -118,26 +138,42 @@ def add_weight_history(db, device_id, weight, date):
     history = history[-30:]
     set_user_data(db, device_id, "weight_history", json.dumps(history))
 
-def extract_user_data_from_message(message, ai_response):
-    prompt = f"""Analyse ce message et la réponse du coach.
-Extrait UNIQUEMENT les infos factuelles sur l'utilisateur.
-Message: {message}
-Réponse: {ai_response}
-Retourne UNIQUEMENT un JSON valide avec les clés pertinentes parmi :
-name, age, weight, height, goal, level, squat_weight, bench_weight, deadlift_weight, sessions_per_week, streak, calories
-Si aucune info retourne {{}}.
-Ne retourne QUE le JSON."""
+def detect_and_save_program(db, device_id, user_message, ai_response):
+    detection_prompt = f"""Analyse cette réponse d'un coach IA.
+Est-ce que cette réponse contient un programme d'entraînement complet (avec séances, exercices, séries/reps) ?
+Est-ce que cette réponse contient un plan nutritionnel complet (avec repas, calories, macros) ?
+
+Réponds UNIQUEMENT avec ce JSON :
+{{
+  "is_training_program": true/false,
+  "is_nutrition_plan": true/false,
+  "title": "Titre court du programme (max 5 mots)",
+  "objective": "Objectif principal en 3 mots max"
+}}
+
+Réponse à analyser:
+{ai_response[:500]}"""
     try:
-        response = groq_client.chat.completions.create(
+        detection = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
+            messages=[{"role": "user", "content": detection_prompt}],
+            max_tokens=150,
         )
-        text = response.choices[0].message.content.strip()
+        text = detection.choices[0].message.content.strip()
         text = text.replace("```json", "").replace("```", "").strip()
-        return json.loads(text)
-    except:
-        return {}
+        data = json.loads(text)
+        if data.get("is_training_program"):
+            db.add(AIProgram(device_id=device_id, title=data.get("title", "Programme IA"), objective=data.get("objective", "Général"), content=ai_response))
+            db.commit()
+            print(f"Programme entraînement sauvegardé: {data.get('title')}")
+        if data.get("is_nutrition_plan"):
+            db.add(AINutritionPlan(device_id=device_id, title=data.get("title", "Plan nutrition IA"), objective=data.get("objective", "Général"), content=ai_response))
+            db.commit()
+            print(f"Plan nutrition sauvegardé: {data.get('title')}")
+    except Exception as e:
+        print(f"Erreur détection programme: {e}")
+
+def extract_user_data_from_message(message, ai_response):
 
 def calculate_angle(a, b, c):
     a, b, c = np.array(a), np.array(b), np.array(c)
@@ -411,6 +447,7 @@ async def chat(
     if len(history) == 0:
         conv.title = user_text[:40] + ("..." if len(user_text) > 40 else "")
 
+    detect_and_save_program(db, x_device_id, user_text, ai_response)
     conv.updated_at = datetime.now()
     db.commit()
     db.close()
@@ -448,6 +485,42 @@ async def update_user_data(data: str = Form(...), x_device_id: str = Header(defa
         print(f"Erreur update_user_data: {e}")
     db.close()
     return {"message": "updated"}
+
+    @app.get("/ai-programs/")
+async def get_ai_programs(x_device_id: str = Header(default="default")):
+    db = DBSession()
+    programs = db.query(AIProgram).filter(AIProgram.device_id == x_device_id).order_by(AIProgram.created_at.desc()).all()
+    result = [{"id": p.id, "title": p.title, "objective": p.objective, "content": p.content, "created_at": p.created_at.strftime("%d/%m/%Y")} for p in programs]
+    db.close()
+    return result
+
+@app.delete("/ai-programs/{program_id}")
+async def delete_ai_program(program_id: int, x_device_id: str = Header(default="default")):
+    db = DBSession()
+    program = db.query(AIProgram).filter(AIProgram.id == program_id, AIProgram.device_id == x_device_id).first()
+    if program:
+        db.delete(program)
+        db.commit()
+    db.close()
+    return {"message": "deleted"}
+
+@app.get("/ai-nutrition-plans/")
+async def get_ai_nutrition_plans(x_device_id: str = Header(default="default")):
+    db = DBSession()
+    plans = db.query(AINutritionPlan).filter(AINutritionPlan.device_id == x_device_id).order_by(AINutritionPlan.created_at.desc()).all()
+    result = [{"id": p.id, "title": p.title, "objective": p.objective, "content": p.content, "created_at": p.created_at.strftime("%d/%m/%Y")} for p in plans]
+    db.close()
+    return result
+
+@app.delete("/ai-nutrition-plans/{plan_id}")
+async def delete_ai_nutrition_plan(plan_id: int, x_device_id: str = Header(default="default")):
+    db = DBSession()
+    plan = db.query(AINutritionPlan).filter(AINutritionPlan.id == plan_id, AINutritionPlan.device_id == x_device_id).first()
+    if plan:
+        db.delete(plan)
+        db.commit()
+    db.close()
+    return {"message": "deleted"}
 
 @app.get("/daily-message/")
 async def get_daily_message(x_device_id: str = Header(default="default")):
