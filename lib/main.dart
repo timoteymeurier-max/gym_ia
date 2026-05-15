@@ -230,44 +230,130 @@ class HomePageV2 extends StatefulWidget {
   State<HomePageV2> createState() => _HomePageV2State();
 }
 
-class _HomePageV2State extends State<HomePageV2> with SingleTickerProviderStateMixin {
+class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _chatController = TextEditingController();
   double _scrollOffset = 0;
-  late AnimationController _animCtrl;
+ 
+  // Animation controllers
+  late AnimationController _fadeCtrl;
+  late AnimationController _typewriterCtrl;
+  late AnimationController _pillsCtrl;
+  late AnimationController _cursorCtrl;
+  late AnimationController _profileCtrl;
+ 
   late Animation<double> _fadeAnim;
-
+  late Animation<double> _cursorAnim;
+  late Animation<double> _profileAnim;
+ 
+  // Typewriter
+  String _displayedText = '';
+  int _typewriterIndex = 0;
+  Timer? _typewriterTimer;
+  bool _typewriterDone = false;
+ 
+  // Pills animation
+  final List<AnimationController> _pillControllers = [];
+  final List<Animation<double>> _pillAnims = [];
+ 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
-    _animCtrl.forward();
+ 
+    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
+ 
+    _typewriterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 100));
+ 
+    _cursorCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat(reverse: true);
+    _cursorAnim = CurvedAnimation(parent: _cursorCtrl, curve: Curves.easeInOut);
+ 
+    _profileCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _profileAnim = CurvedAnimation(parent: _profileCtrl, curve: Curves.elasticOut);
+ 
+    _pillsCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+ 
+    // Créer 4 animations pour les pills
+    for (int i = 0; i < 4; i++) {
+      final ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+      final anim = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: ctrl, curve: Curves.easeOutBack));
+      _pillControllers.add(ctrl);
+      _pillAnims.add(anim);
+    }
+ 
+    _fadeCtrl.forward();
+    Future.delayed(const Duration(milliseconds: 300), () => _profileCtrl.forward());
+ 
     _scrollController.addListener(() => setState(() => _scrollOffset = _scrollController.offset));
   }
-
+ 
+  @override
+  void didUpdateWidget(HomePageV2 oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Démarrer typewriter quand la phrase arrive
+    if (oldWidget.dailyMessage != widget.dailyMessage && widget.dailyMessage.isNotEmpty && _displayedText.isEmpty) {
+      _startTypewriter();
+    }
+    // Si déjà une phrase au premier build
+    if (widget.dailyMessage.isNotEmpty && _displayedText.isEmpty && !_typewriterDone) {
+      _startTypewriter();
+    }
+  }
+ 
+  void _startTypewriter() {
+    _typewriterIndex = 0;
+    _displayedText = '';
+    _typewriterDone = false;
+    _typewriterTimer?.cancel();
+    _typewriterTimer = Timer.periodic(const Duration(milliseconds: 35), (timer) {
+      if (_typewriterIndex < widget.dailyMessage.length) {
+        if (mounted) {
+          setState(() {
+            _displayedText = widget.dailyMessage.substring(0, _typewriterIndex + 1);
+            _typewriterIndex++;
+          });
+        }
+      } else {
+        timer.cancel();
+        if (mounted) setState(() => _typewriterDone = true);
+        // Animer les pills après le typewriter
+        for (int i = 0; i < _pillControllers.length; i++) {
+          Future.delayed(Duration(milliseconds: 100 * i), () {
+            if (mounted) _pillControllers[i].forward();
+          });
+        }
+      }
+    });
+  }
+ 
   @override
   void dispose() {
     _scrollController.dispose();
     _chatController.dispose();
-    _animCtrl.dispose();
+    _fadeCtrl.dispose();
+    _typewriterCtrl.dispose();
+    _cursorCtrl.dispose();
+    _profileCtrl.dispose();
+    _pillsCtrl.dispose();
+    _typewriterTimer?.cancel();
+    for (final c in _pillControllers) c.dispose();
     super.dispose();
   }
-
+ 
   String _levelShort(String level) {
     if (level == 'debutant') return 'Débutant';
     if (level == 'intermediaire') return 'Intermédiaire';
     if (level == 'avance') return 'Avancé';
     return level;
   }
-
+ 
   String _getTimeGreeting() {
     final h = DateTime.now().hour;
     if (h < 12) return 'Prêt pour la séance du matin ?';
     if (h < 17) return 'Belle journée pour s\'entraîner';
     return 'Séance du soir, on y va !';
   }
-
+ 
   void _openProfile() async {
     await showDialog(
       context: context,
@@ -279,7 +365,7 @@ class _HomePageV2State extends State<HomePageV2> with SingleTickerProviderStateM
     );
     widget.onUserDataChanged();
   }
-
+ 
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -293,55 +379,63 @@ class _HomePageV2State extends State<HomePageV2> with SingleTickerProviderStateM
     final level = widget.userData['level'] ?? '';
     final height = widget.userData['height'] ?? '';
     final age = widget.userData['age'] ?? '';
-
-    // Transitions basées sur le scroll
+ 
     final heroProgress = (_scrollOffset / (screenHeight * 0.45)).clamp(0.0, 1.0);
     final heroOpacity = (1.0 - heroProgress * 1.4).clamp(0.0, 1.0);
     final statsOpacity = ((heroProgress - 0.35) / 0.65).clamp(0.0, 1.0);
-
+    final statsSlide = (1.0 - statsOpacity) * 30;
+ 
     List<Map<String, dynamic>> weightHistory = [];
     try {
       final raw = widget.userData['weight_history'] ?? '[]';
       weightHistory = (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e)).toList();
     } catch (_) {}
-
+ 
+    final pills = [
+      {'text': 'Analyser mon squat', 'icon': Icons.videocam_rounded},
+      {'text': 'Programme IA', 'icon': Icons.auto_awesome_rounded},
+      {'text': 'Augmenter la charge ?', 'icon': Icons.trending_up_rounded},
+      {'text': 'Recette protéinée', 'icon': Icons.restaurant_rounded},
+    ];
+ 
     return SafeArea(
       bottom: false,
       child: Stack(
         children: [
-          // ── LAYER 1 : Scroll content (stats) ──────────────────
+          // ── LAYER 1 : Scroll content ──────────────────────────
           CustomScrollView(
             controller: _scrollController,
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // Espace plein écran pour le hero
               SliverToBoxAdapter(child: SizedBox(height: screenHeight - 80)),
-              // Stats qui apparaissent après le scroll
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    Opacity(
-                      opacity: statsOpacity,
-                      child: Column(children: [
-                        _buildProfileCard(name, weight, height, age, level),
-                        const SizedBox(height: 14),
-                        _buildPerfsRow(squat, streak, lastScore),
-                        const SizedBox(height: 14),
-                        _buildWeekCard(),
-                        const SizedBox(height: 14),
-                        if (weightHistory.length >= 2) ...[_buildWeightChart(weightHistory), const SizedBox(height: 14)],
-                        if (lastScore != '--') ...[_buildLastAnalysis(lastScore, lastReps, lastDate), const SizedBox(height: 14)],
-                        _buildQuickActions(),
-                      ]),
+                    Transform.translate(
+                      offset: Offset(0, statsSlide),
+                      child: Opacity(
+                        opacity: statsOpacity,
+                        child: Column(children: [
+                          _buildProfileCard(name, weight, height, age, level),
+                          const SizedBox(height: 14),
+                          _buildPerfsRow(squat, streak, lastScore),
+                          const SizedBox(height: 14),
+                          _buildWeekCard(),
+                          const SizedBox(height: 14),
+                          if (weightHistory.length >= 2) ...[_buildWeightChart(weightHistory), const SizedBox(height: 14)],
+                          if (lastScore != '--') ...[_buildLastAnalysis(lastScore, lastReps, lastDate), const SizedBox(height: 14)],
+                          _buildQuickActions(),
+                        ]),
+                      ),
                     ),
                   ]),
                 ),
               ),
             ],
           ),
-
-          // ── LAYER 2 : Hero plein écran ChatGPT-style ──────────
+ 
+          // ── LAYER 2 : Hero plein écran ────────────────────────
           Positioned.fill(
             child: IgnorePointer(
               ignoring: heroOpacity < 0.05,
@@ -355,49 +449,72 @@ class _HomePageV2State extends State<HomePageV2> with SingleTickerProviderStateM
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Top row : greeting + profil
+                        // Top row
                         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(
-                              name.isNotEmpty ? 'Bonjour, $name 👋' : 'Bonjour 👋',
-                              style: const TextStyle(fontSize: 14, color: kTextDim, fontWeight: FontWeight.w500),
-                            ),
+                            Text(name.isNotEmpty ? 'Bonjour, $name 👋' : 'Bonjour 👋', style: const TextStyle(fontSize: 14, color: kTextDim, fontWeight: FontWeight.w500)),
                             Text(_getTimeGreeting(), style: const TextStyle(fontSize: 11, color: Color(0xFF444444))),
                           ]),
-                          Clickable(
-                            onTap: _openProfile,
-                            child: Container(
-                              width: 40, height: 40,
-                              decoration: BoxDecoration(
-                                color: kCard2, shape: BoxShape.circle,
-                                border: Border.all(color: name.isNotEmpty ? kOrange.withOpacity(0.5) : kBorder),
+                          // Profil animé
+                          ScaleTransition(
+                            scale: _profileAnim,
+                            child: Clickable(
+                              onTap: _openProfile,
+                              child: Container(
+                                width: 42, height: 42,
+                                decoration: BoxDecoration(
+                                  color: kCard2, shape: BoxShape.circle,
+                                  border: Border.all(color: name.isNotEmpty ? kOrange.withOpacity(0.6) : kBorder, width: 1.5),
+                                  boxShadow: name.isNotEmpty ? [BoxShadow(color: kOrange.withOpacity(0.2), blurRadius: 12, spreadRadius: 2)] : [],
+                                ),
+                                child: name.isNotEmpty
+                                    ? Center(child: Text(name[0].toUpperCase(), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: kOrange)))
+                                    : const Icon(Icons.person_rounded, color: kTextDim, size: 18),
                               ),
-                              child: name.isNotEmpty
-                                  ? Center(child: Text(name[0].toUpperCase(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kOrange)))
-                                  : const Icon(Icons.person_rounded, color: kTextDim, size: 18),
                             ),
                           ),
                         ]),
-
+ 
                         const Spacer(),
-
-                        // ── Phrase IA — grande, style ChatGPT ──
+ 
+                        // Badge IA
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: kOrange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: kOrange.withOpacity(0.3)),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Container(width: 6, height: 6, decoration: const BoxDecoration(color: kOrange, shape: BoxShape.circle)),
+                            const SizedBox(width: 6),
+                            const Text('Coach IA', style: TextStyle(fontSize: 11, color: kOrange, fontWeight: FontWeight.w600)),
+                          ]),
+                        ),
+ 
+                        // Phrase IA avec typewriter + curseur
                         widget.dailyMessage.isEmpty
                             ? const SizedBox(height: 44, child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: kOrange, strokeWidth: 1.5))))
-                            : Text(
-                                widget.dailyMessage,
-                                style: const TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.bold,
-                                  color: kText,
-                                  height: 1.3,
-                                  letterSpacing: -0.8,
+                            : ShaderMask(
+                                shaderCallback: (bounds) => const LinearGradient(
+                                  colors: [Colors.white, Color(0xFFFFD4BC)],
+                                ).createShader(bounds),
+                                child: Text(
+                                  _displayedText,
+                                  style: const TextStyle(
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.bold,
+                                    height: 1.3,
+                                    letterSpacing: -0.8,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
-
+ 
                         const SizedBox(height: 28),
-
-                        // ── Barre d'écriture style ChatGPT ──
+ 
+                        // Barre d'écriture
                         Container(
                           decoration: BoxDecoration(
                             color: kCard,
@@ -426,31 +543,43 @@ class _HomePageV2State extends State<HomePageV2> with SingleTickerProviderStateM
                                 onTap: () => _chatController.clear(),
                                 child: Container(
                                   padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(colors: [kOrange, Color(0xFFFF9A6C)]),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [BoxShadow(color: kOrange.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))],
+                                  ),
                                   child: const Icon(Icons.send_rounded, color: Colors.white, size: 17),
                                 ),
                               ),
                             ),
                           ]),
                         ),
-
+ 
                         const SizedBox(height: 14),
-
-                        // ── Pills de suggestions ──
-                        Wrap(spacing: 8, runSpacing: 8, children: [
-                          _pill('Analyser mon squat', Icons.videocam_rounded),
-                          _pill('Programme IA', Icons.auto_awesome_rounded),
-                          _pill('Augmenter la charge ?', Icons.trending_up_rounded),
-                          _pill('Recette protéinée', Icons.restaurant_rounded),
-                        ]),
-
+ 
+                        // Pills animées
+                        Wrap(spacing: 8, runSpacing: 8, children: pills.asMap().entries.map((e) {
+                          final i = e.key;
+                          final pill = e.value;
+                          return ScaleTransition(
+                            scale: i < _pillAnims.length ? _pillAnims[i] : const AlwaysStoppedAnimation(1.0),
+                            child: _pill(pill['text'] as String, pill['icon'] as IconData),
+                          );
+                        }).toList()),
+ 
                         const Spacer(),
-
-                        // ── Indicateur scroll ──
-                        Center(child: Column(children: [
-                          Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white.withOpacity(0.1), size: 22),
-                          Text('Voir mes stats', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.1))),
-                        ])),
+ 
+                        // Indicateur scroll animé
+                        Center(child: AnimatedBuilder(
+                          animation: _cursorAnim,
+                          builder: (context, child) => Transform.translate(
+                            offset: Offset(0, _cursorAnim.value * 4),
+                            child: Column(children: [
+                              Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white.withOpacity(0.1), size: 22),
+                              Text('Voir mes stats', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.1))),
+                            ]),
+                          ),
+                        )),
                         const SizedBox(height: 12),
                       ],
                     ),
@@ -459,8 +588,8 @@ class _HomePageV2State extends State<HomePageV2> with SingleTickerProviderStateM
               ),
             ),
           ),
-
-          // ── LAYER 3 : Compact header après scroll ─────────────
+ 
+          // ── LAYER 3 : Header compact ──────────────────────────
           AnimatedOpacity(
             opacity: (1.0 - heroOpacity * 2).clamp(0.0, 1.0),
             duration: const Duration(milliseconds: 150),
@@ -473,6 +602,12 @@ class _HomePageV2State extends State<HomePageV2> with SingleTickerProviderStateM
                   border: Border(bottom: BorderSide(color: kBorder.withOpacity(0.4))),
                 ),
                 child: Row(children: [
+                  // Badge IA compact
+                  Container(
+                    width: 6, height: 6,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: const BoxDecoration(color: kOrange, shape: BoxShape.circle),
+                  ),
                   Expanded(
                     child: Text(
                       widget.dailyMessage,
@@ -500,7 +635,7 @@ class _HomePageV2State extends State<HomePageV2> with SingleTickerProviderStateM
       ),
     );
   }
-
+ 
   Widget _pill(String text, IconData icon) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
     decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
@@ -2387,159 +2522,359 @@ class AINutritionDetailPage extends StatelessWidget {
 }
 
 // ===================== PROGRESS PAGE V2 =====================
-class ProgressPageV2 extends StatelessWidget {
+// ===================== PROGRESS PAGE V2 =====================
+// Remplace la classe ProgressPageV2 entière par ce code
+
+class ProgressPageV2 extends StatefulWidget {
   final Map<String, String> userData;
   const ProgressPageV2({super.key, required this.userData});
+  @override
+  State<ProgressPageV2> createState() => _ProgressPageV2State();
+}
+
+class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStateMixin {
+  late AnimationController _barsCtrl;
+  late Animation<double> _barsAnim;
+  late AnimationController _ringCtrl;
+  late Animation<double> _ringAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _barsCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+    _barsAnim = CurvedAnimation(parent: _barsCtrl, curve: Curves.easeOutCubic);
+    _ringCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500));
+    _ringAnim = CurvedAnimation(parent: _ringCtrl, curve: Curves.easeOutCubic);
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) { _barsCtrl.forward(); _ringCtrl.forward(); }
+    });
+  }
+
+  @override
+  void dispose() {
+    _barsCtrl.dispose();
+    _ringCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final squat = userData['squat_weight'] ?? '--';
-    final bench = userData['bench_weight'] ?? '--';
-    final deadlift = userData['deadlift_weight'] ?? '--';
-    final weight = userData['weight'] ?? '--';
-    final sessions = userData['sessions_per_week'] ?? '--';
-    final streak = userData['streak'] ?? '--';
-    final lastScore = userData['last_squat_score'] ?? '--';
-    final goal = userData['goal'] ?? '';
+    final squat = widget.userData['squat_weight'] ?? '--';
+    final bench = widget.userData['bench_weight'] ?? '--';
+    final deadlift = widget.userData['deadlift_weight'] ?? '--';
+    final weight = widget.userData['weight'] ?? '--';
+    final sessions = widget.userData['sessions_per_week'] ?? '--';
+    final streak = widget.userData['streak'] ?? '--';
+    final lastScore = widget.userData['last_squat_score'] ?? '--';
+    final goal = widget.userData['goal'] ?? '';
+    final level = widget.userData['level'] ?? '';
 
+    // Score global simulé
+    final scoreInt = int.tryParse(lastScore) ?? 0;
+
+    // Analyses mockées multi-exercices
     final analyses = [
-      {'exercise': 'Squat', 'score': 85, 'date': '12/05', 'icon': '🦵', 'color': kOrange},
-      {'exercise': 'Développé couché', 'score': 72, 'date': '10/05', 'icon': '💪', 'color': kBlue},
-      {'exercise': 'Deadlift', 'score': 90, 'date': '08/05', 'icon': '⚡', 'color': kPurple},
+      {'exercise': 'Squat', 'score': 85, 'date': '14/05', 'icon': '🦵', 'color': kOrange, 'improvement': '+5'},
+      {'exercise': 'Développé couché', 'score': 72, 'date': '12/05', 'icon': '💪', 'color': kBlue, 'improvement': '+2'},
+      {'exercise': 'Soulevé de terre', 'score': 90, 'date': '10/05', 'icon': '⚡', 'color': kPurple, 'improvement': '+8'},
+      {'exercise': 'Tractions', 'score': 68, 'date': '08/05', 'icon': '🔝', 'color': kGreen, 'improvement': '+3'},
+      {'exercise': 'Développé militaire', 'score': 78, 'date': '06/05', 'icon': '🏋️', 'color': kYellow, 'improvement': '+1'},
     ];
 
-    return SafeArea(bottom: false, child: SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Progression', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText)),
-        const SizedBox(height: 4),
-        Text('Tes performances', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
-        const SizedBox(height: 24),
+    // Records personnels multi-exercices
+    final prs = [
+      {'exercise': 'Squat', 'weight': squat != '--' ? squat : '100', 'date': '10/05', 'icon': '🦵', 'color': kOrange},
+      {'exercise': 'Développé couché', 'weight': bench != '--' ? bench : '80', 'date': '08/05', 'icon': '💪', 'color': kBlue},
+      {'exercise': 'Soulevé de terre', 'weight': deadlift != '--' ? deadlift : '140', 'date': '06/05', 'icon': '⚡', 'color': kPurple},
+      {'exercise': 'Développé militaire', 'weight': '60', 'date': '04/05', 'icon': '🏋️', 'color': kYellow},
+      {'exercise': 'Curl biceps', 'weight': '20', 'date': '02/05', 'icon': '💪', 'color': kOrangeLight},
+    ];
 
-        // Stats rapides
-        const Text('STATS RAPIDES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-        const SizedBox(height: 12),
-        GridView.count(
-          crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.6,
-          children: [
-            _statCard('Poids', '$weight kg', Icons.monitor_weight_outlined, Colors.blue),
-            _statCard('Séances', '$sessions/sem', Icons.bolt_rounded, kOrange),
-            _statCard('Streak', '$streak jours 🔥', Icons.local_fire_department_rounded, kYellow),
-            _statCard('Score', '$lastScore/100', Icons.analytics_rounded, kGreen),
-          ],
-        ),
-        const SizedBox(height: 24),
+    // Données graphique poids simulées
+    final weightHistory = <Map<String, dynamic>>[];
+    try {
+      final raw = widget.userData['weight_history'] ?? '[]';
+      final parsed = (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      weightHistory.addAll(parsed);
+    } catch (_) {}
+    if (weightHistory.isEmpty) {
+      weightHistory.addAll([
+        {'date': '01/05', 'weight': 79.2}, {'date': '05/05', 'weight': 78.8},
+        {'date': '09/05', 'weight': 78.5}, {'date': '13/05', 'weight': 78.0},
+      ]);
+    }
 
-        // Charges
-        const Text('MES CHARGES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
-          child: Column(children: [
-            _exerciseBar('Squat', squat != '--' ? '$squat kg' : 'Non renseigné', squat != '--' ? (double.tryParse(squat) ?? 0) / 200 : 0.3, kOrange),
-            _exerciseBar('Développé couché', bench != '--' ? '$bench kg' : 'Non renseigné', bench != '--' ? (double.tryParse(bench) ?? 0) / 150 : 0.3, kBlue),
-            _exerciseBar('Soulevé de terre', deadlift != '--' ? '$deadlift kg' : 'Non renseigné', deadlift != '--' ? (double.tryParse(deadlift) ?? 0) / 250 : 0.3, kPurple),
-          ]),
-        ),
-        const SizedBox(height: 24),
-
-        // Streak calendar
-        const Text('CALENDRIER STREAK', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-        const SizedBox(height: 12),
-        _buildStreakCalendar(),
-        const SizedBox(height: 24),
-
-        // Historique analyses IA
-        const Text('HISTORIQUE ANALYSES IA', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-        const SizedBox(height: 12),
-        ...analyses.map((a) {
-          final score = a['score'] as int;
-          final color = score >= 80 ? kGreen : score >= 60 ? kOrange : kRed;
-          return Clickable(
-            onTap: () {},
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: color.withOpacity(0.15))),
-              child: Row(children: [
-                Container(width: 44, height: 44, decoration: BoxDecoration(color: (a['color'] as Color).withOpacity(0.12), borderRadius: BorderRadius.circular(12)), child: Center(child: Text(a['icon'] as String, style: const TextStyle(fontSize: 20)))),
-                const SizedBox(width: 12),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(a['exercise'] as String, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
-                  Text(a['date'] as String, style: const TextStyle(fontSize: 12, color: kTextDim)),
-                ])),
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-                  child: Center(child: Text('$score', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color))),
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: kTextDim),
-              ]),
-            ),
-          );
-        }).toList(),
-        const SizedBox(height: 24),
-
-        // Bilan IA global
-        const Text('BILAN IA GLOBAL', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kOrange.withOpacity(0.2))),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.auto_awesome_rounded, color: kOrange, size: 18)),
-              const SizedBox(width: 10),
-              const Text('Analyse IA', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+    return SafeArea(
+      bottom: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Header
+          Row(children: [
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Progression', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText)),
+              Text('Tes performances globales', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
             ]),
-            const SizedBox(height: 12),
-            Text(goal.isNotEmpty ? 'Objectif : $goal. Continue à travailler et parle à ton coach pour un bilan complet !' : 'Génère un bilan IA complet de tes performances de la semaine.', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.55), height: 1.6)),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.psychology_rounded, size: 16),
-                label: const Text('Générer mon bilan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-              ),
-            ),
+            const Spacer(),
+            // Badge niveau
+            if (level.isNotEmpty) _buildLevelBadge(level),
           ]),
-        ),
-      ]),
-    ));
+          const SizedBox(height: 24),
+
+          // ── Score global + anneau ──────────────────────────────
+          _buildScoreRing(scoreInt),
+          const SizedBox(height: 20),
+
+          // ── Stats rapides animées ──────────────────────────────
+          const Text('STATS RAPIDES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          GridView.count(
+            crossAxisCount: 2, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.6,
+            children: [
+              _statCard('Poids', '$weight kg', Icons.monitor_weight_outlined, kBlue, '+0.5kg ce mois'),
+              _statCard('Séances', '$sessions/sem', Icons.bolt_rounded, kOrange, 'Cette semaine'),
+              _statCard('Streak', '$streak j 🔥', Icons.local_fire_department_rounded, kYellow, 'Continue !'),
+              _statCard('Meilleur score', '$lastScore/100', Icons.analytics_rounded, kGreen, 'Dernière analyse'),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // ── Courbe de poids ────────────────────────────────────
+          const Text('ÉVOLUTION DU POIDS', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          _buildWeightCurve(weightHistory),
+          const SizedBox(height: 24),
+
+          // ── Records personnels multi-exos ──────────────────────
+          const Text('MES RECORDS PERSONNELS', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          _buildPRSection(prs),
+          const SizedBox(height: 24),
+
+          // ── Barres de force animées ────────────────────────────
+          const Text('MES CHARGES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
+            child: Column(children: [
+              _animatedBar('Squat', squat != '--' ? squat : '0', 200, kOrange),
+              _animatedBar('Développé couché', bench != '--' ? bench : '0', 150, kBlue),
+              _animatedBar('Soulevé de terre', deadlift != '--' ? deadlift : '0', 250, kPurple),
+              _animatedBar('Développé militaire', widget.userData['press_weight'] ?? '0', 100, kYellow),
+              _animatedBar('Curl biceps', widget.userData['curl_weight'] ?? '0', 60, kOrangeLight),
+            ]),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Calendrier streak gamifié ──────────────────────────
+          const Text('CALENDRIER STREAK', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          _buildStreakCalendar(streak),
+          const SizedBox(height: 24),
+
+          // ── Historique analyses IA tous exercices ──────────────
+          const Text('HISTORIQUE ANALYSES IA', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 4),
+          Text('Tous tes exercices analysés', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3))),
+          const SizedBox(height: 12),
+          ...analyses.map((a) => _buildAnalysisCard(a)).toList(),
+          const SizedBox(height: 24),
+
+          // ── Bilan IA global ────────────────────────────────────
+          const Text('BILAN IA GLOBAL', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          _buildAIBilan(goal),
+        ]),
+      ),
+    );
   }
 
-  Widget _statCard(String label, String value, IconData icon, Color color) {
+  // ── Badge niveau ──────────────────────────────────────────────
+  Widget _buildLevelBadge(String level) {
+    String label = level == 'debutant' ? 'Débutant' : level == 'intermediaire' ? 'Intermédiaire' : 'Avancé';
+    Color color = level == 'debutant' ? kGreen : level == 'intermediaire' ? kOrange : kPurple;
+    String icon = level == 'debutant' ? '🌱' : level == 'intermediaire' ? '⚡' : '🔥';
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 20),
-        const Spacer(),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kText), overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 11, color: kTextDim)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(icon, style: const TextStyle(fontSize: 14)),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w700)),
       ]),
     );
   }
 
-  Widget _exerciseBar(String name, String value, double progress, Color color) {
-    return Container(margin: const EdgeInsets.only(bottom: 14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Text(name, style: const TextStyle(fontSize: 13, color: kText, fontWeight: FontWeight.w500)),
-        const Spacer(),
-        Text(value, style: const TextStyle(fontSize: 13, color: kTextDim)),
+  // ── Anneau score global ────────────────────────────────────────
+  Widget _buildScoreRing(int score) {
+    final color = score >= 80 ? kGreen : score >= 60 ? kOrange : kRed;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.2)),
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.05), Colors.transparent]),
+      ),
+      child: Row(children: [
+        // Anneau animé
+        AnimatedBuilder(
+          animation: _ringAnim,
+          builder: (context, child) => SizedBox(
+            width: 90, height: 90,
+            child: CustomPaint(
+              painter: _RingPainter(
+                progress: score > 0 ? (_ringAnim.value * score / 100) : 0,
+                color: color,
+              ),
+              child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Text(score > 0 ? '$score' : '--', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
+                Text('/100', style: const TextStyle(fontSize: 10, color: kTextDim)),
+              ])),
+            ),
+          ),
+        ),
+        const SizedBox(width: 20),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Score global', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+          const SizedBox(height: 4),
+          Text('Basé sur tes dernières analyses IA tous exercices confondus', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.45), height: 1.4)),
+          const SizedBox(height: 10),
+          Row(children: [
+            _miniTag(score >= 80 ? '🏆 Excellent' : score >= 60 ? '⚡ Bon niveau' : '🌱 En progression', color),
+          ]),
+        ])),
       ]),
-      const SizedBox(height: 6),
-      ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: progress.clamp(0.0, 1.0), backgroundColor: kBorder, valueColor: AlwaysStoppedAnimation(color), minHeight: 6)),
-    ]));
+    );
   }
 
-  Widget _buildStreakCalendar() {
+  Widget _miniTag(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withOpacity(0.3))),
+    child: Text(text, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+  );
+
+  // ── Courbe de poids ────────────────────────────────────────────
+  Widget _buildWeightCurve(List<Map<String, dynamic>> data) {
+    if (data.length < 2) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
+        child: Center(child: Text('Enregistre ton poids dans le profil pour voir l\'évolution', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3)))),
+      );
+    }
+    final weights = data.map((e) => (e['weight'] as num).toDouble()).toList();
+    final first = weights.first;
+    final last = weights.last;
+    final diff = last - first;
+    final diffText = diff > 0 ? '+${diff.toStringAsFixed(1)}kg' : '${diff.toStringAsFixed(1)}kg';
+    final diffColor = diff <= 0 ? kGreen : kRed;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text('${last.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: kText)),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: diffColor.withOpacity(0.12), borderRadius: BorderRadius.circular(6)),
+            child: Text(diffText, style: TextStyle(fontSize: 12, color: diffColor, fontWeight: FontWeight.w600)),
+          ),
+          const Spacer(),
+          Text('${data.length} mesures', style: const TextStyle(fontSize: 11, color: kTextDim)),
+        ]),
+        const SizedBox(height: 16),
+        SizedBox(height: 100, child: CustomPaint(painter: _WeightCurvePainter(data), size: Size.infinite)),
+        const SizedBox(height: 8),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(data.first['date'] ?? '', style: const TextStyle(fontSize: 10, color: kTextDim)),
+          Text(data.last['date'] ?? '', style: const TextStyle(fontSize: 10, color: kTextDim)),
+        ]),
+      ]),
+    );
+  }
+
+  // ── Records personnels ─────────────────────────────────────────
+  Widget _buildPRSection(List<Map<String, dynamic>> prs) {
+    return SizedBox(
+      height: 110,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: prs.length,
+        itemBuilder: (context, i) {
+          final pr = prs[i];
+          final color = pr['color'] as Color;
+          return Container(
+            width: 120,
+            margin: const EdgeInsets.only(right: 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: color.withOpacity(0.25)),
+              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.08), Colors.transparent]),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [
+                Text(pr['icon'] as String, style: const TextStyle(fontSize: 14)),
+                const Spacer(),
+                Container(width: 5, height: 5, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+              ]),
+              const SizedBox(height: 6),
+              Text('${pr['weight']} kg', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color)),
+              Text(pr['exercise'] as String, style: const TextStyle(fontSize: 10, color: kTextDim), overflow: TextOverflow.ellipsis),
+              Text(pr['date'] as String, style: const TextStyle(fontSize: 9, color: Color(0xFF444444))),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Barre animée ───────────────────────────────────────────────
+  Widget _animatedBar(String name, String weightStr, double max, Color color) {
+    final val = double.tryParse(weightStr) ?? 0;
+    final progress = val > 0 ? (val / max).clamp(0.0, 1.0) : 0.0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(name, style: const TextStyle(fontSize: 13, color: kText, fontWeight: FontWeight.w500)),
+          const Spacer(),
+          Text(val > 0 ? '$weightStr kg' : 'Non renseigné', style: const TextStyle(fontSize: 13, color: kTextDim)),
+        ]),
+        const SizedBox(height: 6),
+        AnimatedBuilder(
+          animation: _barsAnim,
+          builder: (context, child) => ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (progress * _barsAnim.value).clamp(0.0, 1.0),
+              backgroundColor: kBorder,
+              valueColor: AlwaysStoppedAnimation(color),
+              minHeight: 6,
+            ),
+          ),
+        ),
+        if (val > 0) ...[
+          const SizedBox(height: 4),
+          Text('${(progress * 100).toStringAsFixed(0)}% de l\'objectif élite', style: TextStyle(fontSize: 10, color: color.withOpacity(0.6))),
+        ],
+      ]),
+    );
+  }
+
+  // ── Calendrier streak gamifié ──────────────────────────────────
+  Widget _buildStreakCalendar(String streakStr) {
+    final streakInt = int.tryParse(streakStr) ?? 0;
     final days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
     final weeks = [
       [true, true, false, true, true, false, false],
@@ -2547,27 +2882,243 @@ class ProgressPageV2 extends StatelessWidget {
       [false, true, true, false, true, true, true],
       [true, true, false, true, false, false, false],
     ];
+    final totalDone = weeks.expand((w) => w).where((d) => d).length;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
       child: Column(children: [
+        Row(children: [
+          Text('$streakInt jours', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
+          const SizedBox(width: 8),
+          const Text('🔥', style: TextStyle(fontSize: 18)),
+          const Spacer(),
+          Text('$totalDone/28 ce mois', style: const TextStyle(fontSize: 12, color: kTextDim)),
+        ]),
+        const SizedBox(height: 14),
         Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: days.map((d) => SizedBox(width: 28, child: Text(d, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: kTextDim, fontWeight: FontWeight.w600)))).toList()),
         const SizedBox(height: 8),
         ...weeks.map((week) => Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: week.map((done) => AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            width: 28, height: 28,
-            decoration: BoxDecoration(
-              color: done ? kOrange : kCard2,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: done ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null,
-          )).toList()),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: week.map((done) => AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: 28, height: 28,
+              decoration: BoxDecoration(
+                color: done ? kOrange : kCard2,
+                borderRadius: BorderRadius.circular(6),
+                boxShadow: done ? [BoxShadow(color: kOrange.withOpacity(0.3), blurRadius: 6)] : [],
+              ),
+              child: done ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null,
+            )).toList(),
+          ),
         )).toList(),
+        const SizedBox(height: 12),
+        // Barre de progression mensuelle
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: totalDone / 28,
+            backgroundColor: kBorder,
+            valueColor: const AlwaysStoppedAnimation(kOrange),
+            minHeight: 4,
+          ),
+        ),
       ]),
     );
   }
+
+  // ── Carte analyse IA ───────────────────────────────────────────
+  Widget _buildAnalysisCard(Map<String, dynamic> a) {
+    final score = a['score'] as int;
+    final color = score >= 80 ? kGreen : score >= 60 ? kOrange : kRed;
+    final improvement = a['improvement'] as String;
+    final impColor = improvement.startsWith('+') ? kGreen : kRed;
+
+    return Clickable(
+      onTap: () {},
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withOpacity(0.15)),
+        ),
+        child: Row(children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(color: (a['color'] as Color).withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+            child: Center(child: Text(a['icon'] as String, style: const TextStyle(fontSize: 20))),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(a['exercise'] as String, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+            const SizedBox(height: 2),
+            Row(children: [
+              Text(a['date'] as String, style: const TextStyle(fontSize: 11, color: kTextDim)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: impColor.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                child: Text(improvement, style: TextStyle(fontSize: 10, color: impColor, fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ])),
+          // Mini score ring
+          SizedBox(
+            width: 44, height: 44,
+            child: CustomPaint(
+              painter: _RingPainter(progress: score / 100, color: color, strokeWidth: 4),
+              child: Center(child: Text('$score', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color))),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: kTextDim),
+        ]),
+      ),
+    );
+  }
+
+  // ── Bilan IA ───────────────────────────────────────────────────
+  Widget _buildAIBilan(String goal) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kOrange.withOpacity(0.2)),
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [kOrange.withOpacity(0.05), Colors.transparent]),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.auto_awesome_rounded, color: kOrange, size: 18)),
+          const SizedBox(width: 10),
+          const Text('Bilan IA global', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: kOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+            child: const Text('Tous exercices', style: TextStyle(fontSize: 10, color: kOrange, fontWeight: FontWeight.w600)),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Text(
+          goal.isNotEmpty
+              ? 'Objectif : $goal. Tes analyses montrent une progression constante sur l\'ensemble de tes exercices. Continue à travailler et consulte ton coach pour un bilan complet !'
+              : 'Génère un bilan IA complet de tes performances sur tous tes exercices. Ton coach analysera squats, développés couchés, deadlifts et plus encore.',
+          style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.55), height: 1.6),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.psychology_rounded, size: 16),
+            label: const Text('Générer mon bilan complet', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kOrange, foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 0,
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _statCard(String label, String value, IconData icon, Color color, String sub) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kBorder)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, color: color, size: 18),
+          const Spacer(),
+          Container(width: 6, height: 6, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        ]),
+        const Spacer(),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kText), overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 1),
+        Text(label, style: const TextStyle(fontSize: 11, color: kTextDim)),
+        Text(sub, style: TextStyle(fontSize: 9, color: color.withOpacity(0.7))),
+      ]),
+    );
+  }
+}
+
+// ── Ring painter ───────────────────────────────────────────────
+class _RingPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  final double strokeWidth;
+  const _RingPainter({required this.progress, required this.color, this.strokeWidth = 7});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+    final bgPaint = Paint()..color = color.withOpacity(0.1)..strokeWidth = strokeWidth..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+    final fgPaint = Paint()..color = color..strokeWidth = strokeWidth..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, bgPaint);
+    final sweepAngle = 2 * 3.14159265 * progress;
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), -3.14159265 / 2, sweepAngle, false, fgPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) => old.progress != progress;
+}
+
+// ── Weight curve painter ───────────────────────────────────────
+class _WeightCurvePainter extends CustomPainter {
+  final List<Map<String, dynamic>> data;
+  _WeightCurvePainter(this.data);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.length < 2) return;
+    final weights = data.map((e) => (e['weight'] as num).toDouble()).toList();
+    final minW = weights.reduce((a, b) => a < b ? a : b) - 0.5;
+    final maxW = weights.reduce((a, b) => a > b ? a : b) + 0.5;
+    final range = maxW - minW == 0 ? 1.0 : maxW - minW;
+
+    final paint = Paint()..color = kBlue..strokeWidth = 2.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+    final fillPaint = Paint()
+      ..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [kBlue.withOpacity(0.2), kBlue.withOpacity(0.0)]).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..style = PaintingStyle.fill;
+
+    final path = Path(), fillPath = Path();
+    for (int i = 0; i < data.length; i++) {
+      final x = i / (data.length - 1) * size.width;
+      final y = size.height - ((weights[i] - minW) / range * size.height);
+      if (i == 0) { path.moveTo(x, y); fillPath.moveTo(x, size.height); fillPath.lineTo(x, y); }
+      else {
+        final px = (i - 1) / (data.length - 1) * size.width;
+        final py = size.height - ((weights[i - 1] - minW) / range * size.height);
+        final cpX = (px + x) / 2;
+        path.cubicTo(cpX, py, cpX, y, x, y);
+        fillPath.cubicTo(cpX, py, cpX, y, x, y);
+      }
+    }
+    fillPath.lineTo(size.width, size.height); fillPath.close();
+    canvas.drawPath(fillPath, fillPaint); canvas.drawPath(path, paint);
+
+    final dotPaint = Paint()..color = kBlue..style = PaintingStyle.fill;
+    final labelStyle = TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 9);
+    for (int i = 0; i < data.length; i++) {
+      final x = i / (data.length - 1) * size.width;
+      final y = size.height - ((weights[i] - minW) / range * size.height);
+      canvas.drawCircle(Offset(x, y), 4, dotPaint);
+      // Label poids
+      final tp = TextPainter(text: TextSpan(text: '${weights[i].toStringAsFixed(1)}', style: labelStyle), textDirection: TextDirection.ltr);
+      tp.layout(); tp.paint(canvas, Offset(x - tp.width / 2, y - 16));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter _) => true;
 }
 
 // ===================== PROFILE PAGE V2 =====================

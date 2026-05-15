@@ -84,6 +84,20 @@ class AINutritionPlan(Base):
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
 
+
+class ExercisePerf(Base):
+    __tablename__ = "exercise_perfs"
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String, default="default")
+    exercise = Column(String)
+    weight = Column(Float, nullable=True)
+    reps = Column(Integer, nullable=True)
+    sets = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+    date = Column(String)
+    created_at = Column(DateTime, default=datetime.now)
+
+
 Base.metadata.create_all(engine)
 
 DBSession = sessionmaker(bind=engine)
@@ -500,6 +514,44 @@ async def chat(
         if v and str(v).strip() and str(v) != "None":
             set_user_data(db, x_device_id, k, str(v))
 
+    # Détecter les perfs mentionnées dans le chat
+    perf_prompt = f"""Analyse ce message d'un sportif.
+Extrait UNIQUEMENT les performances mentionnées avec un exercice ET une charge ou des répétitions.
+
+Message: {user_text}
+
+Retourne UNIQUEMENT un JSON valide comme ceci :
+[
+  {{"exercise": "Squat", "weight": 100, "reps": 5, "sets": 4}},
+  {{"exercise": "Développé couché", "weight": 80, "reps": 8, "sets": 3}}
+]
+
+Si aucune perf mentionnée retourne [].
+Ne retourne QUE le JSON."""
+    try:
+        perf_resp = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": perf_prompt}],
+            max_tokens=300,
+        )
+        perf_text = perf_resp.choices[0].message.content.strip()
+        perf_text = perf_text.replace("```json", "").replace("```", "").strip()
+        perfs = json.loads(perf_text)
+        for p in perfs:
+            if p.get("exercise") and (p.get("weight") or p.get("reps")):
+                db.add(ExercisePerf(
+                    device_id=x_device_id,
+                    exercise=p["exercise"],
+                    weight=p.get("weight"),
+                    reps=p.get("reps"),
+                    sets=p.get("sets"),
+                    date=datetime.now().strftime("%d/%m/%Y"),
+                ))
+                db.commit()
+                print(f"Perf sauvegardée: {p['exercise']} {p.get('weight')}kg")
+    except Exception as e:
+        print(f"Erreur détection perfs: {e}")
+
     user_msg = Message(conversation_id=conv_id, role="user", content=user_text, video_filename=video_filename)
     assistant_msg = Message(conversation_id=conv_id, role="assistant", content=full_response)
     db.add(user_msg)
@@ -582,6 +634,56 @@ async def delete_ai_nutrition_plan(plan_id: int, x_device_id: str = Header(defau
         db.commit()
     db.close()
     return {"message": "deleted"}
+
+    @app.get("/exercise-perfs/")
+async def get_exercise_perfs(exercise: str = "", x_device_id: str = Header(default="default")):
+    db = DBSession()
+    query = db.query(ExercisePerf).filter(ExercisePerf.device_id == x_device_id)
+    if exercise:
+        query = query.filter(ExercisePerf.exercise == exercise)
+    perfs = query.order_by(ExercisePerf.date.desc()).all()
+    result = [{"id": p.id, "exercise": p.exercise, "weight": p.weight, "reps": p.reps, "sets": p.sets, "notes": p.notes, "date": p.date} for p in perfs]
+    db.close()
+    return result
+
+@app.post("/exercise-perfs/")
+async def add_exercise_perf(
+    exercise: str = Form(...),
+    weight: float = Form(default=0),
+    reps: int = Form(default=0),
+    sets: int = Form(default=0),
+    notes: str = Form(default=""),
+    date: str = Form(default=""),
+    x_device_id: str = Header(default="default")
+):
+    db = DBSession()
+    perf = ExercisePerf(
+        device_id=x_device_id,
+        exercise=exercise,
+        weight=weight if weight > 0 else None,
+        reps=reps if reps > 0 else None,
+        sets=sets if sets > 0 else None,
+        notes=notes if notes else None,
+        date=date if date else datetime.now().strftime("%d/%m/%Y"),
+    )
+    db.add(perf)
+    db.commit()
+    db.refresh(perf)
+    result = {"id": perf.id, "exercise": perf.exercise, "weight": perf.weight, "reps": perf.reps, "sets": perf.sets, "notes": perf.notes, "date": perf.date}
+    db.close()
+    return result
+
+@app.delete("/exercise-perfs/{perf_id}")
+async def delete_exercise_perf(perf_id: int, x_device_id: str = Header(default="default")):
+    db = DBSession()
+    perf = db.query(ExercisePerf).filter(ExercisePerf.id == perf_id, ExercisePerf.device_id == x_device_id).first()
+    if perf:
+        db.delete(perf)
+        db.commit()
+    db.close()
+    return {"message": "deleted"}
+
+    
 
 @app.get("/daily-message/")
 async def get_daily_message(x_device_id: str = Header(default="default")):
