@@ -139,20 +139,29 @@ def add_weight_history(db, device_id, weight, date):
     set_user_data(db, device_id, "weight_history", json.dumps(history))
 
 def detect_and_save_program(db, device_id, user_message, ai_response):
-    detection_prompt = f"""Analyse cette réponse d'un coach IA.
-Est-ce que cette réponse contient un programme d'entraînement complet (avec séances, exercices, séries/reps) ?
-Est-ce que cette réponse contient un plan nutritionnel complet (avec repas, calories, macros) ?
+    detection_prompt = f"""Analyse cette réponse d'un coach sportif IA.
 
-Réponds UNIQUEMENT avec ce JSON :
+Réponds UNIQUEMENT avec ce JSON sans aucun texte autour :
 {{
-  "is_training_program": true/false,
-  "is_nutrition_plan": true/false,
-  "title": "Titre court du programme (max 5 mots)",
-  "objective": "Objectif principal en 3 mots max"
+  "is_training_program": true ou false,
+  "is_nutrition_plan": true ou false,
+  "title": "Titre court 3-5 mots",
+  "objective": "Objectif 2-3 mots"
 }}
 
+Mets true pour is_training_program si la réponse contient :
+- Des exercices listés avec séries/reps OU
+- Un planning d'entraînement sur plusieurs jours OU
+- Une structure de programme (Jour 1, Jour 2... ou Lundi, Mardi...)
+
+Mets true pour is_nutrition_plan si la réponse contient :
+- Des repas listés avec calories/macros OU
+- Un planning alimentaire sur plusieurs jours OU
+- Une liste d'aliments recommandés avec quantités
+
 Réponse à analyser:
-{ai_response[:500]}"""
+{ai_response[:800]}"""
+
     try:
         detection = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -162,18 +171,97 @@ Réponse à analyser:
         text = detection.choices[0].message.content.strip()
         text = text.replace("```json", "").replace("```", "").strip()
         data = json.loads(text)
+
         if data.get("is_training_program"):
-            db.add(AIProgram(device_id=device_id, title=data.get("title", "Programme IA"), objective=data.get("objective", "Général"), content=ai_response))
+            structure_prompt = f"""Tu es un assistant qui structure des programmes d'entraînement.
+Prends ce programme et retourne UNIQUEMENT un JSON structuré comme ceci :
+{{
+  "days": [
+    {{
+      "day": "Lundi",
+      "label": "Push",
+      "exercises": [
+        {{"name": "Développé couché", "sets": "4", "reps": "8-10", "rest": "90s"}}
+      ]
+    }}
+  ],
+  "tips": ["Conseil 1", "Conseil 2"]
+}}
+
+Ne retourne QUE le JSON.
+Programme à structurer:
+{ai_response[:1500]}"""
+
+            structure_resp = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": structure_prompt}],
+                max_tokens=2000,
+            )
+            structured = structure_resp.choices[0].message.content.strip()
+            structured = structured.replace("```json", "").replace("```", "").strip()
+            json.loads(structured)
+            db.add(AIProgram(device_id=device_id, title=data.get("title", "Programme IA"), objective=data.get("objective", "Général"), content=structured))
             db.commit()
             print(f"Programme entraînement sauvegardé: {data.get('title')}")
+
         if data.get("is_nutrition_plan"):
-            db.add(AINutritionPlan(device_id=device_id, title=data.get("title", "Plan nutrition IA"), objective=data.get("objective", "Général"), content=ai_response))
+            structure_prompt = f"""Tu es un assistant qui structure des plans nutritionnels.
+Prends ce plan et retourne UNIQUEMENT un JSON structuré comme ceci :
+{{
+  "days": [
+    {{
+      "day": "Lundi",
+      "meals": [
+        {{"name": "Petit déjeuner", "foods": ["Omelette 3 œufs", "Flocons d'avoine 80g"], "calories": 520, "protein": 38}}
+      ],
+      "total_calories": 2400,
+      "total_protein": 180
+    }}
+  ],
+  "tips": ["Conseil 1", "Conseil 2"]
+}}
+
+Ne retourne QUE le JSON.
+Plan à structurer:
+{ai_response[:1500]}"""
+
+            structure_resp = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": structure_prompt}],
+                max_tokens=2000,
+            )
+            structured = structure_resp.choices[0].message.content.strip()
+            structured = structured.replace("```json", "").replace("```", "").strip()
+            json.loads(structured)
+            db.add(AINutritionPlan(device_id=device_id, title=data.get("title", "Plan nutrition IA"), objective=data.get("objective", "Général"), content=structured))
             db.commit()
             print(f"Plan nutrition sauvegardé: {data.get('title')}")
+
     except Exception as e:
+        import traceback
         print(f"Erreur détection programme: {e}")
+        traceback.print_exc()
 
 def extract_user_data_from_message(message, ai_response):
+    prompt = f"""Analyse ce message et la réponse du coach.
+Extrait UNIQUEMENT les infos factuelles sur l'utilisateur.
+Message: {message}
+Réponse: {ai_response}
+Retourne UNIQUEMENT un JSON valide avec les clés pertinentes parmi :
+name, age, weight, height, goal, level, squat_weight, bench_weight, deadlift_weight, sessions_per_week, streak, calories
+Si aucune info retourne {{}}.
+Ne retourne QUE le JSON."""
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300,
+        )
+        text = response.choices[0].message.content.strip()
+        text = text.replace("```json", "").replace("```", "").strip()
+        return json.loads(text)
+    except:
+        return {}
 
 def calculate_angle(a, b, c):
     a, b, c = np.array(a), np.array(b), np.array(c)
@@ -324,15 +412,33 @@ Profil :
 - Bench : {user_profile.get('bench_weight', 'Non renseigné')} kg
 - Deadlift : {user_profile.get('deadlift_weight', 'Non renseigné')} kg
 """
-    system_prompt = f"""Tu es un coach sportif IA nouvelle génération.
+    system_prompt = f"""Tu es un coach sportif IA nouvelle génération, expert en musculation et nutrition.
 {profile_text}
-STYLE : Direct, motivant, tutoie toujours, emojis modérés (max 3), jamais plus de 200 mots sauf analyse vidéo.
+STYLE : Direct, motivant, tutoie toujours, emojis modérés (max 3).
+
+PROGRAMME D'ENTRAÎNEMENT — quand on te demande un programme, donne TOUJOURS :
+- Minimum 4-6 exercices par séance
+- Les séries, répétitions et temps de repos pour chaque exercice
+- Un programme sur plusieurs jours (ex: PPL = 6 jours, Full Body = 3 jours)
+- Structure claire : Jour 1 - Push, Jour 2 - Pull, etc.
+- Adapté au niveau et objectif de l'utilisateur
+- Pas de limite de mots pour les programmes
+
+PLAN NUTRITIONNEL — quand on te demande un plan nutrition, donne TOUJOURS :
+- Les repas de la journée (petit déjeuner, déjeuner, dîner, collations)
+- Les aliments avec quantités précises en grammes
+- Les calories et macros (protéines, glucides, lipides) par repas
+- Un plan sur plusieurs jours
+- Adapté à l'objectif (prise de masse, sèche, etc.)
+- Pas de limite de mots pour les plans
+
 ANALYSE VIDÉO — structure obligatoire :
 **Ce que tu fais bien ✅** (1-2 points)
 **Ce qu'on améliore 🎯** (1-2 points avec correction)
 **Conseil prochaine séance 💡** (1 conseil actionnable)
 **Charge** : Augmenter/Maintenir/Réduire + pourquoi
-QUESTIONS : Réponse directe 3-5 phrases, terminer par conseil actionnable.
+
+QUESTIONS SIMPLES : Réponse directe 3-5 phrases, terminer par conseil actionnable.
 Réponds toujours en français."""
 
     history = [{"role": m["role"], "content": m["content"]} for m in messages_history]
@@ -486,7 +592,7 @@ async def update_user_data(data: str = Form(...), x_device_id: str = Header(defa
     db.close()
     return {"message": "updated"}
 
-    @app.get("/ai-programs/")
+@app.get("/ai-programs/")
 async def get_ai_programs(x_device_id: str = Header(default="default")):
     db = DBSession()
     programs = db.query(AIProgram).filter(AIProgram.device_id == x_device_id).order_by(AIProgram.created_at.desc()).all()

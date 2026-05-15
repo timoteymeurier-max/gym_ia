@@ -29,7 +29,7 @@ const kBlue = Color(0xFF60A5FA);
 const kPurple = Color(0xFFA78BFA);
 const kYellow = Color(0xFFFBBF24);
 const kRed = Color(0xFFF87171);
-const String kBaseUrl = 'https://gym-ia-n9tf.onrender.com';
+const String kBaseUrl = 'http://localhost:8000';
 
 // ===================== MOCK DATA =====================
 final mockExercises = [
@@ -161,8 +161,8 @@ class _RootPageState extends State<RootPage> {
     final pages = [
       HomePageV2(userData: userData, onUserDataChanged: refreshUserData, deviceId: deviceId, dailyMessage: dailyMessage),
       CoachPageV2(deviceId: deviceId, onMessageSent: refreshUserData),
-      TrainingPageV2(userData: userData),
-      NutritionPageV2(userData: userData),
+      TrainingPageV2(userData: userData, deviceId: deviceId),
+      NutritionPageV2(userData: userData, deviceId: deviceId),
       ProgressPageV2(userData: userData),
     ];
     return Scaffold(
@@ -1107,7 +1107,8 @@ class _ChatViewV2State extends State<ChatViewV2> {
 // ===================== TRAINING PAGE V2 =====================
 class TrainingPageV2 extends StatelessWidget {
   final Map<String, String> userData;
-  const TrainingPageV2({super.key, required this.userData});
+  final String deviceId;
+  const TrainingPageV2({super.key, required this.userData, required this.deviceId});
 
   @override
   Widget build(BuildContext context) {
@@ -1146,7 +1147,7 @@ class TrainingPageV2 extends StatelessWidget {
           title: 'Programmes IA',
           description: 'Programmes générés par ton coach IA',
           tag: 'Personnalisé',
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIProgramsPage())),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AIProgramsPage(deviceId: deviceId))),
         ),
       ]),
     ));
@@ -1555,16 +1556,58 @@ class ExerciseDetailPage extends StatelessWidget {
 }
 
 // ===================== AI PROGRAMS PAGE =====================
-class AIProgramsPage extends StatelessWidget {
-  const AIProgramsPage({super.key});
+class AIProgramsPage extends StatefulWidget {
+  final String deviceId;
+  const AIProgramsPage({super.key, required this.deviceId});
+  @override
+  State<AIProgramsPage> createState() => _AIProgramsPageState();
+}
+
+class _AIProgramsPageState extends State<AIProgramsPage> {
+  List<Map<String, dynamic>> programs = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadPrograms();
+  }
+
+  Future<void> loadPrograms() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/ai-programs/'),
+        headers: {'x-device-id': widget.deviceId},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        setState(() { programs = data.map((e) => Map<String, dynamic>.from(e)).toList(); loading = false; });
+      }
+    } catch (e) {
+      setState(() => loading = false);
+    }
+  }
+
+  Future<void> deleteProgram(int id) async {
+    await http.delete(Uri.parse('$kBaseUrl/ai-programs/$id'), headers: {'x-device-id': widget.deviceId});
+    loadPrograms();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
-      appBar: AppBar(backgroundColor: kBg, title: const Text('Programmes IA', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)), iconTheme: const IconThemeData(color: kText), elevation: 0),
+      appBar: AppBar(
+        backgroundColor: kBg,
+        title: const Text('Programmes IA', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: kText),
+        elevation: 0,
+        actions: [IconButton(onPressed: loadPrograms, icon: const Icon(Icons.refresh_rounded, color: kTextDim, size: 20))],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         child: Column(children: [
+          // Bouton générer
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(color: kPurple.withOpacity(0.08), borderRadius: BorderRadius.circular(18), border: Border.all(color: kPurple.withOpacity(0.2))),
@@ -1576,7 +1619,7 @@ class AIProgramsPage extends StatelessWidget {
               Text('Dis à ton coach IA tes objectifs et il créera un programme sur mesure.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5), height: 1.5)),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.psychology_rounded, size: 16),
                 label: const Text('Demander au Coach IA', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(backgroundColor: kPurple, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
@@ -1584,11 +1627,179 @@ class AIProgramsPage extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 24),
-          Align(alignment: Alignment.centerLeft, child: Text('MES PROGRAMMES', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3), fontWeight: FontWeight.w600, letterSpacing: 1.2))),
-          const SizedBox(height: 16),
-          Center(child: Text('Aucun programme généré pour l\'instant.\nDemande à ton coach IA de créer le tien !', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.2), height: 1.6))),
+          const Align(alignment: Alignment.centerLeft, child: Text('MES PROGRAMMES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2))),
+          const SizedBox(height: 12),
+          if (loading)
+            const Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: kOrange, strokeWidth: 2))
+          else if (programs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text('Aucun programme généré pour l\'instant.\nDemande à ton coach IA de créer le tien !', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.2), height: 1.6)),
+            )
+          else
+            ...programs.map((p) => Clickable(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AIProgramDetailPage(program: p))),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kPurple.withOpacity(0.2))),
+                child: Row(children: [
+                  Container(
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(color: kPurple.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
+                    child: const Center(child: Icon(Icons.auto_awesome_rounded, color: kPurple, size: 22)),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(p['title'] ?? 'Programme IA', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+                    const SizedBox(height: 3),
+                    Text('${p['objective']} · ${p['created_at']}', style: const TextStyle(fontSize: 12, color: kTextDim)),
+                  ])),
+                  Clickable(
+                    onTap: () => deleteProgram(p['id']),
+                    child: Padding(padding: const EdgeInsets.only(left: 8), child: Icon(Icons.close_rounded, size: 16, color: Colors.white.withOpacity(0.2))),
+                  ),
+                ]),
+              ),
+            )).toList(),
         ]),
       ),
+    );
+  }
+}
+
+// ===================== AI PROGRAM DETAIL PAGE =====================
+class AIProgramDetailPage extends StatelessWidget {
+  final Map<String, dynamic> program;
+  const AIProgramDetailPage({super.key, required this.program});
+
+  @override
+  Widget build(BuildContext context) {
+    Map<String, dynamic> structured = {};
+    try {
+      structured = jsonDecode(program['content'] ?? '{}');
+    } catch (_) {}
+
+    final days = (structured['days'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList();
+    final tips = (structured['tips'] as List? ?? []).map((e) => e.toString()).toList();
+
+    final dayColors = [kOrange, kBlue, kPurple, kGreen, kYellow, kOrangeLight, kRed];
+    final dayIcons = ['💪', '🔝', '🦵', '💪', '🔝', '🦵', '🧘'];
+
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        backgroundColor: kBg,
+        title: Text(program['title'] ?? 'Programme IA', style: const TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: kText),
+        elevation: 0,
+      ),
+      body: days.isEmpty
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: MarkdownBody(data: program['content'] ?? '', styleSheet: MarkdownStyleSheet(p: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8), height: 1.6))),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Header objectif
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: kPurple.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                  child: Text('${program['objective']} · ${program['created_at']}', style: const TextStyle(fontSize: 12, color: kPurple, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(height: 20),
+
+                // Jours
+                const Text('PROGRAMME', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                const SizedBox(height: 12),
+                ...days.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final day = entry.value;
+                  final color = dayColors[i % dayColors.length];
+                  final icon = dayIcons[i % dayIcons.length];
+                  final exercises = (day['exercises'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList();
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: color.withOpacity(0.25))),
+                    child: Column(children: [
+                      // Header du jour
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.08),
+                          borderRadius: const BorderRadius.only(topLeft: Radius.circular(18), topRight: Radius.circular(18)),
+                        ),
+                        child: Row(children: [
+                          Text(icon, style: const TextStyle(fontSize: 22)),
+                          const SizedBox(width: 10),
+                          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(day['day'] ?? 'Jour ${i + 1}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color)),
+                            if (day['label'] != null) Text(day['label'] as String, style: const TextStyle(fontSize: 12, color: kTextDim)),
+                          ]),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                            child: Text('${exercises.length} exos', style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+                          ),
+                        ]),
+                      ),
+                      // Exercices
+                      ...exercises.asMap().entries.map((exEntry) {
+                        final ex = exEntry.value;
+                        return Clickable(
+                          onTap: () {
+                            final found = mockExercises.firstWhere(
+                              (e) => (e['name'] as String).toLowerCase().contains((ex['name'] as String? ?? '').toLowerCase().split(' ').first),
+                              orElse: () => {'name': ex['name'] ?? '', 'muscle': '--', 'type': '--', 'difficulty': '--', 'icon': '💪', 'color': kOrange},
+                            );
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ExerciseDetailPage(exercise: found)));
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: kBorder.withOpacity(0.5)))),
+                            child: Row(children: [
+                              Container(
+                                width: 32, height: 32,
+                                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                                child: Center(child: Text('${exEntry.key + 1}', style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.bold))),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(ex['name'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+                                if (ex['sets'] != null || ex['reps'] != null)
+                                  Text('${ex['sets'] ?? '?'} séries × ${ex['reps'] ?? '?'} reps${ex['rest'] != null ? ' · Repos ${ex['rest']}' : ''}', style: const TextStyle(fontSize: 11, color: kTextDim)),
+                              ])),
+                              const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: kTextDim),
+                            ]),
+                          ),
+                        );
+                      }).toList(),
+                    ]),
+                  );
+                }).toList(),
+
+                // Conseils
+                if (tips.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Text('CONSEILS', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: kOrange.withOpacity(0.06), borderRadius: BorderRadius.circular(14), border: Border.all(color: kOrange.withOpacity(0.15))),
+                    child: Column(children: tips.map((tip) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('💡 ', style: TextStyle(fontSize: 13)),
+                        Expanded(child: Text(tip, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.7), height: 1.5))),
+                      ]),
+                    )).toList()),
+                  ),
+                ],
+              ]),
+            ),
     );
   }
 }
@@ -1596,7 +1807,8 @@ class AIProgramsPage extends StatelessWidget {
 // ===================== NUTRITION PAGE V2 =====================
 class NutritionPageV2 extends StatelessWidget {
   final Map<String, String> userData;
-  const NutritionPageV2({super.key, required this.userData});
+  final String deviceId;
+  const NutritionPageV2({super.key, required this.userData, required this.deviceId});
 
   @override
   Widget build(BuildContext context) {
@@ -1613,7 +1825,7 @@ class NutritionPageV2 extends StatelessWidget {
         // 2 grands widgets
         _hubCard(context, icon: Icons.restaurant_rounded, color: kGreen, title: 'Recettes prédéfinies', description: 'Repas équilibrés adaptés à tes objectifs', tag: '${mockRecipes.length} recettes', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RecipesPage()))),
         const SizedBox(height: 14),
-        _hubCard(context, icon: Icons.auto_awesome_rounded, color: kOrange, title: 'Plans nutrition IA', description: 'Plans alimentaires générés par ton coach IA', tag: 'Personnalisé', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AINutritionPage()))),
+        _hubCard(context, icon: Icons.auto_awesome_rounded, color: kOrange, title: 'Plans nutrition IA', description: 'Plans alimentaires générés par ton coach IA', tag: 'Personnalisé', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AINutritionPage(deviceId: deviceId)))),
       ]),
     ));
   }
@@ -1809,15 +2021,56 @@ class RecipeDetailPage extends StatelessWidget {
 }
 
 // ===================== AI NUTRITION PAGE =====================
-class AINutritionPage extends StatelessWidget {
-  const AINutritionPage({super.key});
+class AINutritionPage extends StatefulWidget {
+  final String deviceId;
+  const AINutritionPage({super.key, required this.deviceId});
+  @override
+  State<AINutritionPage> createState() => _AINutritionPageState();
+}
+
+class _AINutritionPageState extends State<AINutritionPage> {
+  List<Map<String, dynamic>> plans = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadPlans();
+  }
+
+  Future<void> loadPlans() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/ai-nutrition-plans/'),
+        headers: {'x-device-id': widget.deviceId},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        setState(() { plans = data.map((e) => Map<String, dynamic>.from(e)).toList(); loading = false; });
+      }
+    } catch (e) {
+      setState(() => loading = false);
+    }
+  }
+
+  Future<void> deletePlan(int id) async {
+    await http.delete(Uri.parse('$kBaseUrl/ai-nutrition-plans/$id'), headers: {'x-device-id': widget.deviceId});
+    loadPlans();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kBg,
-      appBar: AppBar(backgroundColor: kBg, title: const Text('Plans nutrition IA', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)), iconTheme: const IconThemeData(color: kText), elevation: 0),
+      appBar: AppBar(
+        backgroundColor: kBg,
+        title: const Text('Plans nutrition IA', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: kText),
+        elevation: 0,
+        actions: [IconButton(onPressed: loadPlans, icon: const Icon(Icons.refresh_rounded, color: kTextDim, size: 20))],
+      ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         child: Column(children: [
           Container(
             padding: const EdgeInsets.all(20),
@@ -1827,18 +2080,166 @@ class AINutritionPage extends StatelessWidget {
               const SizedBox(height: 12),
               const Text('Plan nutritionnel IA', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kText)),
               const SizedBox(height: 6),
-              Text('Ton coach IA crée un plan alimentaire sur mesure basé sur ton profil et tes objectifs.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5), height: 1.5)),
+              Text('Ton coach IA crée un plan alimentaire sur mesure.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5), height: 1.5)),
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                onPressed: () {},
+                onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.auto_awesome_rounded, size: 16),
-                label: const Text('Générer mon plan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                label: const Text('Demander au Coach IA', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
               ),
             ]),
           ),
+          const SizedBox(height: 24),
+          const Align(alignment: Alignment.centerLeft, child: Text('MES PLANS', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2))),
+          const SizedBox(height: 12),
+          if (loading)
+            const Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: kOrange, strokeWidth: 2))
+          else if (plans.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text('Aucun plan généré pour l\'instant.\nDemande à ton coach IA de créer le tien !', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.2), height: 1.6)),
+            )
+          else
+            ...plans.map((p) => Clickable(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AINutritionDetailPage(plan: p))),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: kOrange.withOpacity(0.2))),
+                child: Row(children: [
+                  Container(width: 48, height: 48, decoration: BoxDecoration(color: kOrange.withOpacity(0.12), borderRadius: BorderRadius.circular(12)), child: const Center(child: Icon(Icons.restaurant_rounded, color: kOrange, size: 22))),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(p['title'] ?? 'Plan nutrition IA', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kText)),
+                    const SizedBox(height: 3),
+                    Text('${p['objective']} · ${p['created_at']}', style: const TextStyle(fontSize: 12, color: kTextDim)),
+                  ])),
+                  Clickable(onTap: () => deletePlan(p['id']), child: Padding(padding: const EdgeInsets.only(left: 8), child: Icon(Icons.close_rounded, size: 16, color: Colors.white.withOpacity(0.2)))),
+                ]),
+              ),
+            )).toList(),
         ]),
       ),
+    );
+  }
+}
+
+// ===================== AI NUTRITION DETAIL PAGE =====================
+class AINutritionDetailPage extends StatelessWidget {
+  final Map<String, dynamic> plan;
+  const AINutritionDetailPage({super.key, required this.plan});
+
+  @override
+  Widget build(BuildContext context) {
+    Map<String, dynamic> structured = {};
+    try {
+      structured = jsonDecode(plan['content'] ?? '{}');
+    } catch (_) {}
+
+    final days = (structured['days'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList();
+    final tips = (structured['tips'] as List? ?? []).map((e) => e.toString()).toList();
+    final mealIcons = {'petit déjeuner': '🌅', 'déjeuner': '☀️', 'dîner': '🌙', 'snack': '🍎', 'collation': '🍎'};
+
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        backgroundColor: kBg,
+        title: Text(plan['title'] ?? 'Plan nutrition IA', style: const TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: kText),
+        elevation: 0,
+      ),
+      body: days.isEmpty
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: MarkdownBody(data: plan['content'] ?? '', styleSheet: MarkdownStyleSheet(p: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.8), height: 1.6))),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: kOrange.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                  child: Text('${plan['objective']} · ${plan['created_at']}', style: const TextStyle(fontSize: 12, color: kOrange, fontWeight: FontWeight.w600)),
+                ),
+                const SizedBox(height: 20),
+                const Text('PLAN ALIMENTAIRE', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                const SizedBox(height: 12),
+                ...days.map((day) {
+                  final meals = (day['meals'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList();
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kGreen.withOpacity(0.2))),
+                    child: Column(children: [
+                      // Header jour
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(color: kGreen.withOpacity(0.07), borderRadius: const BorderRadius.only(topLeft: Radius.circular(18), topRight: Radius.circular(18))),
+                        child: Row(children: [
+                          const Text('🥗', style: TextStyle(fontSize: 22)),
+                          const SizedBox(width: 10),
+                          Text(day['day'] ?? '', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kGreen)),
+                          const Spacer(),
+                          if (day['total_calories'] != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(color: kGreen.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+                              child: Text('${day['total_calories']} kcal', style: const TextStyle(fontSize: 11, color: kGreen, fontWeight: FontWeight.w600)),
+                            ),
+                        ]),
+                      ),
+                      // Repas
+                      ...meals.map((meal) {
+                        final mealName = (meal['name'] as String? ?? '').toLowerCase();
+                        final icon = mealIcons.entries.firstWhere((e) => mealName.contains(e.key), orElse: () => const MapEntry('', '🍽️')).value;
+                        final foods = (meal['foods'] as List? ?? []).map((e) => e.toString()).toList();
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: kBorder.withOpacity(0.4)))),
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Row(children: [
+                              Text(icon, style: const TextStyle(fontSize: 16)),
+                              const SizedBox(width: 8),
+                              Text(meal['name'] ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+                              const Spacer(),
+                              if (meal['calories'] != null || meal['protein'] != null)
+                                Text('${meal['calories'] ?? '?'} kcal · ${meal['protein'] ?? '?'}g prot', style: const TextStyle(fontSize: 11, color: kTextDim)),
+                            ]),
+                            if (foods.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              ...foods.map((food) => Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(children: [
+                                  Container(width: 5, height: 5, margin: const EdgeInsets.only(right: 8, top: 2), decoration: BoxDecoration(color: kGreen.withOpacity(0.5), shape: BoxShape.circle)),
+                                  Expanded(child: Text(food, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6)))),
+                                ]),
+                              )).toList(),
+                            ],
+                          ]),
+                        );
+                      }).toList(),
+                    ]),
+                  );
+                }).toList(),
+
+                if (tips.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Text('CONSEILS', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: kOrange.withOpacity(0.06), borderRadius: BorderRadius.circular(14), border: Border.all(color: kOrange.withOpacity(0.15))),
+                    child: Column(children: tips.map((tip) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('💡 ', style: TextStyle(fontSize: 13)),
+                        Expanded(child: Text(tip, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.7), height: 1.5))),
+                      ]),
+                    )).toList()),
+                  ),
+                ],
+              ]),
+            ),
     );
   }
 }
