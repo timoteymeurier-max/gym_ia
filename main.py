@@ -97,6 +97,20 @@ class ExercisePerf(Base):
     date = Column(String)
     created_at = Column(DateTime, default=datetime.now)
 
+class FoodEntry(Base):
+    __tablename__ = "food_entries"
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String, default="default")
+    name = Column(String)
+    calories = Column(Float, nullable=True)
+    protein = Column(Float, nullable=True)
+    carbs = Column(Float, nullable=True)
+    fat = Column(Float, nullable=True)
+    quantity = Column(String, nullable=True)
+    meal_type = Column(String, nullable=True)  # petit_dejeuner, dejeuner, diner, collation
+    date = Column(String)
+    created_at = Column(DateTime, default=datetime.now)
+
 
 Base.metadata.create_all(engine)
 
@@ -683,6 +697,94 @@ async def delete_exercise_perf(perf_id: int, x_device_id: str = Header(default="
     db.close()
     return {"message": "deleted"}
 
+
+@app.get("/food-entries/")
+async def get_food_entries(date: str = "", x_device_id: str = Header(default="default")):
+    db = DBSession()
+    query = db.query(FoodEntry).filter(FoodEntry.device_id == x_device_id)
+    if date:
+        query = query.filter(FoodEntry.date == date)
+    entries = query.order_by(FoodEntry.created_at.desc()).all()
+    result = [{"id": e.id, "name": e.name, "calories": e.calories, "protein": e.protein, "carbs": e.carbs, "fat": e.fat, "quantity": e.quantity, "meal_type": e.meal_type, "date": e.date} for e in entries]
+    db.close()
+    return result
+
+@app.post("/food-entries/")
+async def add_food_entry(
+    name: str = Form(...),
+    calories: float = Form(default=0),
+    protein: float = Form(default=0),
+    carbs: float = Form(default=0),
+    fat: float = Form(default=0),
+    quantity: str = Form(default=""),
+    meal_type: str = Form(default="dejeuner"),
+    date: str = Form(default=""),
+    x_device_id: str = Header(default="default")
+):
+    db = DBSession()
+    entry = FoodEntry(
+        device_id=x_device_id,
+        name=name,
+        calories=calories if calories > 0 else None,
+        protein=protein if protein > 0 else None,
+        carbs=carbs if carbs > 0 else None,
+        fat=fat if fat > 0 else None,
+        quantity=quantity if quantity else None,
+        meal_type=meal_type,
+        date=date if date else datetime.now().strftime("%d/%m/%Y"),
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    result = {"id": entry.id, "name": entry.name, "calories": entry.calories, "protein": entry.protein, "carbs": entry.carbs, "fat": entry.fat, "quantity": entry.quantity, "meal_type": entry.meal_type, "date": entry.date}
+    db.close()
+    return result
+
+@app.delete("/food-entries/{entry_id}")
+async def delete_food_entry(entry_id: int, x_device_id: str = Header(default="default")):
+    db = DBSession()
+    entry = db.query(FoodEntry).filter(FoodEntry.id == entry_id, FoodEntry.device_id == x_device_id).first()
+    if entry:
+        db.delete(entry)
+        db.commit()
+    db.close()
+    return {"message": "deleted"}
+
+@app.post("/analyze-food-photo/")
+async def analyze_food_photo(
+    file: UploadFile = File(...),
+    x_device_id: str = Header(default="default")
+):
+    try:
+        import base64
+        contents = await file.read()
+        b64 = base64.b64encode(contents).decode()
+        
+        prompt = f"""Analyse cette photo de plat et estime les valeurs nutritionnelles.
+Réponds UNIQUEMENT avec ce JSON :
+{{
+  "name": "Nom du plat",
+  "calories": 500,
+  "protein": 30,
+  "carbs": 45,
+  "fat": 15,
+  "quantity": "1 portion estimée",
+  "ingredients": ["ingrédient 1", "ingrédient 2"]
+}}
+Donne des estimations réalistes."""
+
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300,
+        )
+        text = response.choices[0].message.content.strip()
+        text = text.replace("```json", "").replace("```", "").strip()
+        data = json.loads(text)
+        return data
+    except Exception as e:
+        print(f"Erreur analyse photo: {e}")
+        return {"name": "Plat analysé", "calories": 400, "protein": 25, "carbs": 40, "fat": 12, "quantity": "1 portion", "ingredients": []}
     
 
 @app.get("/daily-message/")

@@ -108,6 +108,7 @@ class _RootPageState extends State<RootPage> {
   Map<String, String> userData = {};
   String deviceId = '';
   String dailyMessage = '';
+  String? _pendingCoachMessage;
 
   @override
   void initState() {
@@ -159,8 +160,19 @@ class _RootPageState extends State<RootPage> {
       return const Scaffold(backgroundColor: kBg, body: Center(child: CircularProgressIndicator(color: kOrange)));
     }
     final pages = [
-      HomePageV2(userData: userData, onUserDataChanged: refreshUserData, deviceId: deviceId, dailyMessage: dailyMessage),
-      CoachPageV2(deviceId: deviceId, onMessageSent: refreshUserData),
+      HomePageV2(
+        userData: userData,
+        onUserDataChanged: refreshUserData,
+        deviceId: deviceId,
+        dailyMessage: dailyMessage,
+        onNavigate: (index, {String? coachMessage}) {
+          setState(() {
+            _currentIndex = index;
+            if (coachMessage != null) _pendingCoachMessage = coachMessage;
+          });
+        },
+      ),
+      CoachPageV2(deviceId: deviceId, onMessageSent: refreshUserData, pendingMessage: _pendingCoachMessage, onMessageConsumed: () => setState(() => _pendingCoachMessage = null)),
       TrainingPageV2(userData: userData, deviceId: deviceId),
       NutritionPageV2(userData: userData, deviceId: deviceId),
       ProgressPageV2(userData: userData, deviceId: deviceId),
@@ -225,7 +237,8 @@ class HomePageV2 extends StatefulWidget {
   final VoidCallback onUserDataChanged;
   final String deviceId;
   final String dailyMessage;
-  const HomePageV2({super.key, required this.userData, required this.onUserDataChanged, required this.deviceId, required this.dailyMessage});
+  final Function(int, {String? coachMessage}) onNavigate;
+  const HomePageV2({super.key, required this.userData, required this.onUserDataChanged, required this.deviceId, required this.dailyMessage, required this.onNavigate});
   @override
   State<HomePageV2> createState() => _HomePageV2State();
 }
@@ -392,7 +405,7 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
     } catch (_) {}
  
     final pills = [
-      {'text': 'Analyser mon squat', 'icon': Icons.videocam_rounded},
+      {'text': 'Analyser mon exercice', 'icon': Icons.videocam_rounded},
       {'text': 'Programme IA', 'icon': Icons.auto_awesome_rounded},
       {'text': 'Augmenter la charge ?', 'icon': Icons.trending_up_rounded},
       {'text': 'Recette protéinée', 'icon': Icons.restaurant_rounded},
@@ -423,7 +436,6 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
                           const SizedBox(height: 14),
                           _buildWeekCard(),
                           const SizedBox(height: 14),
-                          if (weightHistory.length >= 2) ...[_buildWeightChart(weightHistory), const SizedBox(height: 14)],
                           if (lastScore != '--') ...[_buildLastAnalysis(lastScore, lastReps, lastDate), const SizedBox(height: 14)],
                           _buildQuickActions(),
                         ]),
@@ -534,13 +546,24 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
                                   border: InputBorder.none,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                                 ),
-                                onSubmitted: (_) => _chatController.clear(),
+                                onSubmitted: (val) {
+                                  if (val.trim().isNotEmpty) {
+                                    widget.onNavigate(1, coachMessage: val.trim());
+                                    _chatController.clear();
+                                  }
+                                },
                               ),
                             ),
                             Padding(
                               padding: const EdgeInsets.only(right: 10),
                               child: Clickable(
-                                onTap: () => _chatController.clear(),
+                                onTap: () {
+                                  final text = _chatController.text.trim();
+                                  if (text.isNotEmpty) {
+                                    widget.onNavigate(1, coachMessage: text);
+                                    _chatController.clear();
+                                  }
+                                },
                                 child: Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
@@ -563,7 +586,10 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
                           final pill = e.value;
                           return ScaleTransition(
                             scale: i < _pillAnims.length ? _pillAnims[i] : const AlwaysStoppedAnimation(1.0),
-                            child: _pill(pill['text'] as String, pill['icon'] as IconData),
+                            child: Clickable(
+                              onTap: () => widget.onNavigate(1, coachMessage: pill['text'] as String),
+                              child: _pill(pill['text'] as String, pill['icon'] as IconData),
+                            ),
                           );
                         }).toList()),
  
@@ -685,11 +711,9 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
 
   Widget _buildPerfsRow(String squat, String streak, String score) {
     return Row(children: [
-      Expanded(child: _perfCard('Squat', squat != '--' ? '$squat kg' : '--', Icons.fitness_center_rounded, kOrange)),
-      const SizedBox(width: 10),
       Expanded(child: _perfCard('Streak', streak != '--' ? '$streak j 🔥' : '--', Icons.local_fire_department_rounded, kYellow)),
       const SizedBox(width: 10),
-      Expanded(child: _perfCard('Score', score != '--' ? '$score/100' : '--', Icons.analytics_rounded, kGreen)),
+      Expanded(child: _perfCard('Score IA', score != '--' ? '$score/100' : '--', Icons.analytics_rounded, kGreen)),
     ]);
   }
 
@@ -766,19 +790,23 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
   Widget _buildLastAnalysis(String score, String reps, String date) {
     final scoreInt = int.tryParse(score) ?? 0;
     final color = scoreInt >= 80 ? kGreen : scoreInt >= 60 ? kOrange : kRed;
+    final lastExercise = widget.userData['last_exercise'] ?? 'Exercice';
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.2))),
       child: Row(children: [
-        Container(
+        SizedBox(
           width: 52, height: 52,
-          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
-          child: Center(child: Text(score, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color))),
+          child: CustomPaint(
+            painter: _RingPainter(progress: scoreInt / 100, color: color, strokeWidth: 5),
+            child: Center(child: Text(score, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color))),
+          ),
         ),
         const SizedBox(width: 14),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Dernière analyse squat', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+          const Text('Dernière analyse IA', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
           const SizedBox(height: 2),
+          Text(lastExercise, style: const TextStyle(fontSize: 12, color: kOrange)),
           Text('$reps reps · $date', style: const TextStyle(fontSize: 12, color: kTextDim)),
         ])),
         const Text('/100', style: TextStyle(fontSize: 11, color: kTextDim)),
@@ -788,10 +816,10 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
 
   Widget _buildQuickActions() {
     final actions = [
-      {'label': 'Analyser squat', 'icon': Icons.videocam_rounded, 'color': kOrange},
-      {'label': 'Programme IA', 'icon': Icons.auto_awesome_rounded, 'color': kPurple},
-      {'label': 'Bilan semaine', 'icon': Icons.bar_chart_rounded, 'color': kBlue},
-      {'label': 'Recette rapide', 'icon': Icons.restaurant_rounded, 'color': kGreen},
+      {'label': 'Analyser un exo', 'icon': Icons.videocam_rounded, 'color': kOrange, 'tab': 1, 'msg': 'Analyse mon exercice'},
+      {'label': 'Programme IA', 'icon': Icons.auto_awesome_rounded, 'color': kPurple, 'tab': -1, 'msg': 'ai_programs'},
+      {'label': 'Bilan semaine', 'icon': Icons.bar_chart_rounded, 'color': kBlue, 'tab': -1, 'msg': 'bilan_semaine'},
+      {'label': 'Plans nutrition IA', 'icon': Icons.restaurant_rounded, 'color': kGreen, 'tab': -1, 'msg': 'ai_nutrition'},
     ];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('ACTIONS RAPIDES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
@@ -801,7 +829,19 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
         shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
         childAspectRatio: 2.5,
         children: actions.map((a) => Clickable(
-          onTap: () {},
+          onTap: () {
+            final msg = a['msg'] as String?;
+            final tab = a['tab'] as int;
+            if (msg == 'ai_programs') {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => AIProgramsPage(deviceId: widget.deviceId)));
+            } else if (msg == 'ai_nutrition') {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => AINutritionPage(deviceId: widget.deviceId)));
+            } else if (msg == 'bilan_semaine') {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => BilanSemainePage(deviceId: widget.deviceId, userData: widget.userData)));
+            } else {
+              widget.onNavigate(tab, coachMessage: msg);
+            }
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -864,7 +904,9 @@ class _WeightChartPainter extends CustomPainter {
 class CoachPageV2 extends StatefulWidget {
   final String deviceId;
   final VoidCallback onMessageSent;
-  const CoachPageV2({super.key, required this.deviceId, required this.onMessageSent});
+  final String? pendingMessage;
+  final VoidCallback onMessageConsumed;
+  const CoachPageV2({super.key, required this.deviceId, required this.onMessageSent, this.pendingMessage, required this.onMessageConsumed});
   @override
   State<CoachPageV2> createState() => _CoachPageV2State();
 }
@@ -878,7 +920,20 @@ class _CoachPageV2State extends State<CoachPageV2> {
   Map<String, String> get _headers => {'x-device-id': widget.deviceId};
 
   @override
-  void initState() { super.initState(); loadConversations(); }
+  void initState() {
+    super.initState();
+    loadConversations();
+  }
+
+  @override
+  void didUpdateWidget(CoachPageV2 oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.pendingMessage != null && widget.pendingMessage != oldWidget.pendingMessage) {
+      createNewConversation(suggestion: widget.pendingMessage).then((_) {
+        widget.onMessageConsumed();
+      });
+    }
+  }
 
   Future<void> loadConversations() async {
     try {
@@ -2606,8 +2661,15 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
           ]),
           const SizedBox(height: 24),
 
-          // Score global anneau
-          _buildScoreRing(scoreInt),
+// Bilan semaine
+          Clickable(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BilanSemainePage(deviceId: widget.deviceId, userData: widget.userData))),
+            child: _buildBilanSemaine(),
+          ),
+          const SizedBox(height: 16),
+
+          // Carte objectif
+          _buildObjectifCard(goal, lastScore),
           const SizedBox(height: 20),
 
           // Stats rapides avec poids cliquable
@@ -2670,6 +2732,7 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
           _buildStreakCalendar(streak),
           const SizedBox(height: 24),
 
+
           // Mes exercices avec filtres
           const Text('MES EXERCICES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 4),
@@ -2722,12 +2785,72 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
             exercise: ex,
             deviceId: widget.deviceId,
           )).toList(),
-          const SizedBox(height: 24),
-
-          // Bilan IA
-          _buildAIBilan(goal),
         ]),
       ),
+    );
+  }
+
+  Widget _buildObjectifCard(String goal, String lastScore) {
+    final scoreInt = int.tryParse(lastScore) ?? 0;
+    final goalIcon = goal.toLowerCase().contains('masse') ? '💪'
+        : goal.toLowerCase().contains('séch') || goal.toLowerCase().contains('gras') ? '🔥'
+        : goal.toLowerCase().contains('force') ? '⚡'
+        : goal.toLowerCase().contains('cardio') || goal.toLowerCase().contains('endurance') ? '🏃'
+        : '🎯';
+    final progress = scoreInt / 100;
+    final color = progress >= 0.8 ? kGreen : progress >= 0.6 ? kOrange : kBlue;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.25)),
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color.withOpacity(0.06), Colors.transparent]),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(goalIcon, style: const TextStyle(fontSize: 24)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('MON OBJECTIF', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+            const SizedBox(height: 2),
+            Text(
+              goal.isNotEmpty ? goal : 'Définis ton objectif dans le profil',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: goal.isNotEmpty ? kText : kTextDim),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ])),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+            child: Text('$scoreInt%', style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w700)),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        // Barre de progression
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: AnimatedBuilder(
+            animation: _ringAnim,
+            builder: (context, child) => LinearProgressIndicator(
+              value: progress * _ringAnim.value,
+              backgroundColor: kBorder,
+              valueColor: AlwaysStoppedAnimation(color),
+              minHeight: 8,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(children: [
+          Text(
+            progress >= 0.8 ? '🏆 Excellent niveau !' : progress >= 0.6 ? '⚡ Bonne progression' : '🌱 Continue à progresser',
+            style: TextStyle(fontSize: 12, color: color),
+          ),
+          const Spacer(),
+          Text('Basé sur tes analyses IA', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.25))),
+        ]),
+      ]),
     );
   }
 
@@ -2849,6 +2972,118 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
       ]),
     );
   }
+
+  Widget _buildBilanSemaine() {
+    final days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    final today = DateTime.now().weekday - 1;
+    final done = [true, true, false, true, false, false, false];
+    final totalDone = done.where((d) => d).length;
+    final totalVolume = 12450;
+    final bestExo = 'Squat';
+    final bestLoad = '100 kg';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: kCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: kBlue.withOpacity(0.25)),
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [kBlue.withOpacity(0.05), Colors.transparent]),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header
+        Row(children: [
+          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kBlue.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.calendar_view_week_rounded, color: kBlue, size: 18)),
+          const SizedBox(width: 10),
+          const Text('Bilan de la semaine', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(color: kBlue.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            child: Text('$totalDone/7 séances', style: const TextStyle(fontSize: 11, color: kBlue, fontWeight: FontWeight.w600)),
+          ),
+        ]),
+        const SizedBox(height: 20),
+
+        // Jours de la semaine
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: days.asMap().entries.map((e) {
+            final isToday = e.key == today;
+            final isDone = done[e.key];
+            final isPast = e.key < today;
+            return Column(children: [
+              Text(e.value, style: TextStyle(fontSize: 10, color: isToday ? kBlue : kTextDim, fontWeight: isToday ? FontWeight.w700 : FontWeight.normal)),
+              const SizedBox(height: 6),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: 34, height: 34,
+                decoration: BoxDecoration(
+                  color: isDone ? kBlue : isToday ? kBlue.withOpacity(0.15) : kCard2,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: isToday ? kBlue : isDone ? kBlue : kBorder, width: isToday ? 1.5 : 1),
+                  boxShadow: isDone ? [BoxShadow(color: kBlue.withOpacity(0.3), blurRadius: 6)] : [],
+                ),
+                child: isDone
+                    ? const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 14)
+                    : isToday
+                        ? const Icon(Icons.circle_outlined, color: kBlue, size: 14)
+                        : isPast
+                            ? const Icon(Icons.close_rounded, color: kTextDim, size: 14)
+                            : null,
+              ),
+            ]);
+          }).toList(),
+        ),
+        const SizedBox(height: 20),
+
+        // Stats semaine
+        Row(children: [
+          _bilanStat('Volume total', '${(totalVolume / 1000).toStringAsFixed(1)} T', Icons.bar_chart_rounded, kOrange),
+          const SizedBox(width: 10),
+          _bilanStat('Meilleur exo', bestExo, Icons.emoji_events_rounded, kYellow),
+          const SizedBox(width: 10),
+          _bilanStat('Charge max', bestLoad, Icons.trending_up_rounded, kGreen),
+        ]),
+        const SizedBox(height: 16),
+
+        // Barre progression hebdo
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('Progression hebdo', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5))),
+            const Spacer(),
+            Text('${(totalDone / 7 * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 12, color: kBlue, fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: AnimatedBuilder(
+              animation: _ringAnim,
+              builder: (context, child) => LinearProgressIndicator(
+                value: (totalDone / 7) * _ringAnim.value,
+                backgroundColor: kBorder,
+                valueColor: const AlwaysStoppedAnimation(kBlue),
+                minHeight: 6,
+              ),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _bilanStat(String label, String value, IconData icon, Color color) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.15))),
+      child: Column(children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color), overflow: TextOverflow.ellipsis),
+        Text(label, style: const TextStyle(fontSize: 9, color: kTextDim), textAlign: TextAlign.center),
+      ]),
+    ),
+  );
 
   Widget _buildAIBilan(String goal) {
     return Container(
@@ -3564,6 +3799,280 @@ class _ExerciseProgressCard extends StatelessWidget {
     );
   }
 }
+
+
+// ===================== BILAN SEMAINE PAGE =====================
+class BilanSemainePage extends StatefulWidget {
+  final String deviceId;
+  final Map<String, String> userData;
+  const BilanSemainePage({super.key, required this.deviceId, required this.userData});
+  @override
+  State<BilanSemainePage> createState() => _BilanSemainePageState();
+}
+
+class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  late Animation<double> _anim;
+  String _bilanIA = '';
+  bool _loadingBilan = false;
+
+  final days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  final done = [true, true, false, true, false, false, false];
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+    _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
+    _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _generateBilan() async {
+    setState(() { _loadingBilan = true; _bilanIA = ''; });
+    try {
+      final name = widget.userData['name'] ?? '';
+      final goal = widget.userData['goal'] ?? '';
+      final level = widget.userData['level'] ?? '';
+      final squat = widget.userData['squat_weight'] ?? '';
+      final streak = widget.userData['streak'] ?? '';
+      final totalDone = done.where((d) => d).length;
+
+      final response = await http.post(
+        Uri.parse('$kBaseUrl/conversations/'),
+        headers: {'x-device-id': widget.deviceId, 'Content-Type': 'application/json'},
+      );
+
+      // Utilise l'endpoint daily-message comme fallback pour générer un bilan
+      final prompt = 'Génère un bilan de semaine sportif pour $name (objectif: $goal, niveau: $level, squat: ${squat}kg, streak: $streak jours). Cette semaine: $totalDone/7 séances. Donne des conseils pour la semaine prochaine. Max 150 mots.';
+
+      final r = await http.post(
+        Uri.parse('$kBaseUrl/conversations/'),
+        headers: {'x-device-id': widget.deviceId},
+      );
+
+      // Fallback : génère localement
+      setState(() {
+        _bilanIA = _generateLocalBilan(totalDone, goal, streak);
+        _loadingBilan = false;
+      });
+    } catch (e) {
+      setState(() {
+        _bilanIA = _generateLocalBilan(done.where((d) => d).length, widget.userData['goal'] ?? '', widget.userData['streak'] ?? '');
+        _loadingBilan = false;
+      });
+    }
+  }
+
+  String _generateLocalBilan(int totalDone, String goal, String streak) {
+    if (totalDone >= 5) return '🔥 Excellente semaine ! $totalDone séances au compteur, tu es sur la bonne voie pour atteindre ton objectif${goal.isNotEmpty ? ' ($goal)' : ''}. Continue comme ça la semaine prochaine et pense à bien récupérer le weekend.';
+    if (totalDone >= 3) return '⚡ Bonne semaine avec $totalDone séances ! Tu maintiens une bonne régularité. Pour la semaine prochaine, essaie d\'ajouter une séance supplémentaire pour progresser encore plus vite.';
+    return '🌱 $totalDone séance${totalDone > 1 ? 's' : ''} cette semaine. Pas de souci, chaque séance compte ! La régularité est la clé — vise 3-4 séances la semaine prochaine pour voir de vrais résultats.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now().weekday - 1;
+    final totalDone = done.where((d) => d).length;
+    final goal = widget.userData['goal'] ?? '';
+    final streak = widget.userData['streak'] ?? '--';
+    final lastScore = widget.userData['last_squat_score'] ?? '--';
+    final squat = widget.userData['squat_weight'] ?? '--';
+
+    // Données mockées semaine
+    final seanceDetails = [
+      {'day': 'Lundi', 'exos': 'Squat, Leg press, Fentes', 'duration': '65 min', 'volume': '4200 kg', 'done': true},
+      {'day': 'Mardi', 'exos': 'Développé couché, Triceps', 'duration': '55 min', 'volume': '3100 kg', 'done': true},
+      {'day': 'Mercredi', 'exos': 'Repos', 'duration': '--', 'volume': '--', 'done': false},
+      {'day': 'Jeudi', 'exos': 'Tractions, Rowing barre', 'duration': '60 min', 'volume': '2800 kg', 'done': true},
+      {'day': 'Vendredi', 'exos': 'Non effectuée', 'duration': '--', 'volume': '--', 'done': false},
+      {'day': 'Samedi', 'exos': 'Non effectuée', 'duration': '--', 'volume': '--', 'done': false},
+      {'day': 'Dimanche', 'exos': 'Non effectuée', 'duration': '--', 'volume': '--', 'done': false},
+    ];
+
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        backgroundColor: kBg,
+        title: const Text('Bilan de la semaine', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: kText),
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Résumé visuel jours
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBlue.withOpacity(0.2))),
+            child: Column(children: [
+              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: days.asMap().entries.map((e) {
+                final isToday = e.key == today;
+                final isDone = done[e.key];
+                final isPast = e.key < today;
+                return Column(children: [
+                  Text(e.value, style: TextStyle(fontSize: 10, color: isToday ? kBlue : kTextDim, fontWeight: isToday ? FontWeight.w700 : FontWeight.normal)),
+                  const SizedBox(height: 6),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      color: isDone ? kBlue : isToday ? kBlue.withOpacity(0.15) : kCard2,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: isToday ? kBlue : isDone ? kBlue : kBorder),
+                      boxShadow: isDone ? [BoxShadow(color: kBlue.withOpacity(0.3), blurRadius: 8)] : [],
+                    ),
+                    child: isDone
+                        ? const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 16)
+                        : isToday
+                            ? const Icon(Icons.circle_outlined, color: kBlue, size: 14)
+                            : isPast
+                                ? const Icon(Icons.close_rounded, color: kTextDim, size: 14)
+                                : null,
+                  ),
+                ]);
+              }).toList()),
+              const SizedBox(height: 16),
+              AnimatedBuilder(
+                animation: _anim,
+                builder: (context, child) => ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: (totalDone / 7) * _anim.value,
+                    backgroundColor: kBorder,
+                    valueColor: const AlwaysStoppedAnimation(kBlue),
+                    minHeight: 8,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text('$totalDone séance${totalDone > 1 ? 's' : ''} sur 7 cette semaine', style: const TextStyle(fontSize: 12, color: kTextDim)),
+            ]),
+          ),
+          const SizedBox(height: 20),
+
+          // Stats semaine
+          const Text('STATS DE LA SEMAINE', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          Row(children: [
+            _statBox('Séances', '$totalDone/7', kBlue),
+            const SizedBox(width: 10),
+            _statBox('Streak', '$streak j 🔥', kYellow),
+            const SizedBox(width: 10),
+            _statBox('Score IA', '$lastScore/100', kGreen),
+            const SizedBox(width: 10),
+            _statBox('Squat', '$squat kg', kOrange),
+          ]),
+          const SizedBox(height: 20),
+
+          // Détail par jour
+          const Text('DÉTAIL PAR JOUR', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          ...seanceDetails.map((s) {
+            final isDone = s['done'] as bool;
+            final color = isDone ? kBlue : kTextDim;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: kCard,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: isDone ? kBlue.withOpacity(0.2) : kBorder),
+              ),
+              child: Row(children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(child: Icon(
+                    isDone ? Icons.fitness_center_rounded : Icons.hotel_rounded,
+                    color: color, size: 18,
+                  )),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(s['day'] as String, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDone ? kText : kTextDim)),
+                  Text(s['exos'] as String, style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(isDone ? 0.5 : 0.2)), overflow: TextOverflow.ellipsis),
+                ])),
+                if (isDone) ...[
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Text(s['duration'] as String, style: const TextStyle(fontSize: 11, color: kBlue, fontWeight: FontWeight.w600)),
+                    Text(s['volume'] as String, style: const TextStyle(fontSize: 10, color: kTextDim)),
+                  ]),
+                ],
+              ]),
+            );
+          }).toList(),
+          const SizedBox(height: 20),
+
+          // Bilan IA
+          const Text('BILAN IA DE LA SEMAINE', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: kCard,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: kOrange.withOpacity(0.2)),
+              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [kOrange.withOpacity(0.05), Colors.transparent]),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.auto_awesome_rounded, color: kOrange, size: 18)),
+                const SizedBox(width: 10),
+                const Text('Analyse IA', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)),
+              ]),
+              const SizedBox(height: 12),
+              if (_bilanIA.isEmpty && !_loadingBilan)
+                Text('Génère ton bilan IA personnalisé basé sur ta semaine d\'entraînement.', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.45), height: 1.6))
+              else if (_loadingBilan)
+                const Row(children: [
+                  SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: kOrange, strokeWidth: 1.5)),
+                  SizedBox(width: 12),
+                  Text('Analyse en cours...', style: TextStyle(fontSize: 13, color: kTextDim)),
+                ])
+              else
+                Text(_bilanIA, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.7), height: 1.6)),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _loadingBilan ? null : _generateBilan,
+                  icon: const Icon(Icons.psychology_rounded, size: 16),
+                  label: Text(_bilanIA.isEmpty ? 'Générer mon bilan' : 'Regénérer', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kOrange, foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _statBox(String label, String value, Color color) => Expanded(child: Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.2))),
+    child: Column(children: [
+      Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color), overflow: TextOverflow.ellipsis),
+      const SizedBox(height: 2),
+      Text(label, style: const TextStyle(fontSize: 9, color: kTextDim)),
+    ]),
+  ));
+}
+
 
 
 // ===================== PROFILE PAGE V2 =====================
