@@ -75,6 +75,36 @@ Future<String> getDeviceId() async {
   return deviceId;
 }
 
+int calculateStreak(List<String> sessions) {
+  if (sessions.isEmpty) return 0;
+  final now = DateTime.now();
+  int streak = 0;
+  DateTime checkDate = DateTime(now.year, now.month, now.day);
+  
+  while (true) {
+    final dateStr = '${checkDate.day.toString().padLeft(2, '0')}/${checkDate.month.toString().padLeft(2, '0')}/${checkDate.year}';
+    if (sessions.contains(dateStr)) {
+      streak++;
+      checkDate = checkDate.subtract(const Duration(days: 1));
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+int calculateWeekSessions(List<String> sessions) {
+  final now = DateTime.now();
+  final today = now.weekday - 1;
+  int count = 0;
+  for (int i = 0; i < 7; i++) {
+    final d = now.subtract(Duration(days: today - i));
+    final dateStr = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    if (sessions.contains(dateStr)) count++;
+  }
+  return count;
+}
+
 class Clickable extends StatelessWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -109,6 +139,7 @@ class _RootPageState extends State<RootPage> {
   String deviceId = '';
   String dailyMessage = '';
   String? _pendingCoachMessage;
+  List<String> trainingSessions = []; // dates cochées ex: ["16/05/2025"]
 
   @override
   void initState() {
@@ -122,6 +153,7 @@ class _RootPageState extends State<RootPage> {
     setState(() => deviceId = id);
     await loadUserData();
     await _loadDailyMessage();
+    await _loadTrainingSessions();
   }
 
   Future<void> loadUserData() async {
@@ -154,6 +186,30 @@ class _RootPageState extends State<RootPage> {
     await loadUserData();
   }
 
+
+  Future<void> _loadTrainingSessions() async {
+    if (deviceId.isEmpty) return;
+    try {
+      final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: {'x-device-id': deviceId});
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        setState(() => trainingSessions = data.map((e) => e['date'] as String).toList());
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleTrainingSession(String date) async {
+    if (trainingSessions.contains(date)) return; // Déjà coché, pas de décocher
+    try {
+      final req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/training-sessions/'));
+      req.headers['x-device-id'] = deviceId;
+      req.fields['date'] = date;
+      await req.send();
+      await _loadTrainingSessions();
+    } catch (_) {}
+  }
+
+
   @override
   Widget build(BuildContext context) {
     if (deviceId.isEmpty) {
@@ -165,6 +221,8 @@ class _RootPageState extends State<RootPage> {
         onUserDataChanged: refreshUserData,
         deviceId: deviceId,
         dailyMessage: dailyMessage,
+        trainingSessions: trainingSessions,
+        onToggleSession: _toggleTrainingSession,
         onNavigate: (index, {String? coachMessage}) {
           setState(() {
             _currentIndex = index;
@@ -175,7 +233,7 @@ class _RootPageState extends State<RootPage> {
       CoachPageV2(deviceId: deviceId, onMessageSent: refreshUserData, pendingMessage: _pendingCoachMessage, onMessageConsumed: () => setState(() => _pendingCoachMessage = null)),
       TrainingPageV2(userData: userData, deviceId: deviceId),
       NutritionPageV2(userData: userData, deviceId: deviceId),
-      ProgressPageV2(userData: userData, deviceId: deviceId),
+      ProgressPageV2(userData: userData, deviceId: deviceId, trainingSessions: trainingSessions, onToggleSession: _toggleTrainingSession),
     ];
     return Scaffold(
       backgroundColor: kBg,
@@ -238,7 +296,9 @@ class HomePageV2 extends StatefulWidget {
   final String deviceId;
   final String dailyMessage;
   final Function(int, {String? coachMessage}) onNavigate;
-  const HomePageV2({super.key, required this.userData, required this.onUserDataChanged, required this.deviceId, required this.dailyMessage, required this.onNavigate});
+  final List<String> trainingSessions;
+  final Function(String) onToggleSession;
+  const HomePageV2({super.key, required this.userData, required this.onUserDataChanged, required this.deviceId, required this.dailyMessage, required this.onNavigate, required this.trainingSessions, required this.onToggleSession});
   @override
   State<HomePageV2> createState() => _HomePageV2State();
 }
@@ -385,7 +445,7 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
     final name = widget.userData['name'] ?? '';
     final weight = widget.userData['weight'] ?? '--';
     final squat = widget.userData['squat_weight'] ?? '--';
-    final streak = widget.userData['streak'] ?? '--';
+    final streak = calculateStreak(widget.trainingSessions).toString();
     final lastScore = widget.userData['last_squat_score'] ?? '--';
     final lastReps = widget.userData['last_squat_reps'] ?? '--';
     final lastDate = widget.userData['last_squat_date'] ?? '';
@@ -733,8 +793,16 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
 
   Widget _buildWeekCard() {
     final days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-    final done = [true, true, false, true, false, false, false];
-    final today = DateTime.now().weekday - 1;
+    final now = DateTime.now();
+    final today = now.weekday - 1;
+    // Dates de la semaine courante
+    final weekDates = List.generate(7, (i) {
+      final d = now.subtract(Duration(days: today - i));
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    });
+    final done = weekDates.map((d) => widget.trainingSessions.contains(d)).toList();
+    final totalDone = done.where((d) => d).length;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
@@ -742,7 +810,7 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
         Row(children: [
           const Text('CETTE SEMAINE', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const Spacer(),
-          Text('${done.where((d) => d).length}/7', style: const TextStyle(fontSize: 12, color: kOrange, fontWeight: FontWeight.bold)),
+          Text('$totalDone/7', style: const TextStyle(fontSize: 12, color: kOrange, fontWeight: FontWeight.bold)),
         ]),
         const SizedBox(height: 12),
         Row(
@@ -750,23 +818,76 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
           children: days.asMap().entries.map((e) {
             final isToday = e.key == today;
             final isDone = done[e.key];
-            return Column(children: [
-              Text(e.value, style: TextStyle(fontSize: 11, color: isToday ? kOrange : kTextDim, fontWeight: isToday ? FontWeight.w700 : FontWeight.normal)),
-              const SizedBox(height: 6),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                width: 32, height: 32,
-                decoration: BoxDecoration(
-                  color: isDone ? kOrange : isToday ? kOrange.withOpacity(0.1) : kCard2,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: isToday ? kOrange : kBorder, width: isToday ? 1.5 : 1),
+            final isPast = e.key < today;
+            return Clickable(
+              onTap: isToday && !isDone ? () => _confirmToggle(weekDates[today]) : () {},
+              child: Column(children: [
+                Text(e.value, style: TextStyle(fontSize: 11, color: isToday ? kOrange : kTextDim, fontWeight: isToday ? FontWeight.w700 : FontWeight.normal)),
+                const SizedBox(height: 6),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(
+                    color: isDone ? kOrange : isToday ? kOrange.withOpacity(0.1) : kCard2,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: isToday ? kOrange : isDone ? kOrange : kBorder, width: isToday ? 1.5 : 1),
+                  ),
+                  child: isDone
+                      ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
+                      : isToday
+                          ? const Icon(Icons.add_rounded, color: kOrange, size: 14)
+                          : isPast
+                              ? const Icon(Icons.close_rounded, color: kTextDim, size: 12)
+                              : null,
                 ),
-                child: isDone ? const Icon(Icons.check_rounded, color: Colors.white, size: 14) : null,
-              ),
-            ]);
+              ]),
+            );
           }).toList(),
         ),
       ]),
+    );
+  }
+
+  void _confirmToggle(String date) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: kBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('💪', style: TextStyle(fontSize: 40)),
+            const SizedBox(height: 12),
+            const Text('Séance confirmée ?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
+            const SizedBox(height: 8),
+            Text('Tu confirmes être allé à la salle aujourd\'hui ?', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5))),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(child: Clickable(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+                  child: const Center(child: Text('Annuler', style: TextStyle(fontSize: 14, color: kTextDim))),
+                ),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: Clickable(
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onToggleSession(date);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)),
+                  child: const Center(child: Text('Oui, j\'y étais !', style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600))),
+                ),
+              )),
+            ]),
+          ]),
+        ),
+      ),
     );
   }
 
@@ -2097,8 +2218,6 @@ class NutritionPageV2 extends StatelessWidget {
   }
 
   Widget _buildCaloriesCard() {
-    const target = 2400;
-    const consumed = 1200;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
@@ -2106,16 +2225,18 @@ class NutritionPageV2 extends StatelessWidget {
         Row(children: [
           const Text("AUJOURD'HUI", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const Spacer(),
-          const Text('$consumed / $target kcal', style: TextStyle(fontSize: 13, color: kTextMid)),
+          Text('Appuie pour voir le détail', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3))),
         ]),
         const SizedBox(height: 12),
-        ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: consumed / target, backgroundColor: kBorder, valueColor: const AlwaysStoppedAnimation(kGreen), minHeight: 8)),
+        ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: 0, backgroundColor: kBorder, valueColor: const AlwaysStoppedAnimation(kGreen), minHeight: 8)),
         const SizedBox(height: 14),
         Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-          _macro('Protéines', '87g', kGreen),
-          _macro('Glucides', '120g', kBlue),
-          _macro('Lipides', '42g', kYellow),
+          _macro('Protéines', '0g', kGreen),
+          _macro('Glucides', '0g', kBlue),
+          _macro('Lipides', '0g', kYellow),
         ]),
+        const SizedBox(height: 8),
+        Text('Ajoute tes repas pour suivre tes macros', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.2))),
       ]),
     );
   }
@@ -2588,7 +2709,9 @@ class AINutritionDetailPage extends StatelessWidget {
 class ProgressPageV2 extends StatefulWidget {
   final Map<String, String> userData;
   final String deviceId;
-  const ProgressPageV2({super.key, required this.userData, required this.deviceId});
+  final List<String> trainingSessions;
+  final Function(String) onToggleSession;
+  const ProgressPageV2({super.key, required this.userData, required this.deviceId, required this.trainingSessions, required this.onToggleSession});
   @override
   State<ProgressPageV2> createState() => _ProgressPageV2State();
 }
@@ -2624,8 +2747,9 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
   @override
   Widget build(BuildContext context) {
     final weight = widget.userData['weight'] ?? '--';
-    final sessions = widget.userData['sessions_per_week'] ?? '--';
-    final streak = widget.userData['streak'] ?? '--';
+    final streak = calculateStreak(widget.trainingSessions).toString();
+    final weekSessions = calculateWeekSessions(widget.trainingSessions).toString();
+    final sessions = weekSessions;
     final lastScore = widget.userData['last_squat_score'] ?? '--';
     final goal = widget.userData['goal'] ?? '';
     final level = widget.userData['level'] ?? '';
@@ -2671,9 +2795,6 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
           ),
           const SizedBox(height: 16),
 
-          // Carte objectif
-          _buildObjectifCard(goal, lastScore),
-          const SizedBox(height: 20),
 
           // Stats rapides avec poids cliquable
           const Text('STATS RAPIDES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
@@ -2720,7 +2841,7 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
                 Row(children: [
                   Expanded(child: _statCard('Séances', '$sessions/sem', Icons.bolt_rounded, kOrange, 'Cette semaine')),
                   const SizedBox(width: 10),
-                  Expanded(child: _statCard('Streak', '$streak j 🔥', Icons.local_fire_department_rounded, kYellow, 'Continue !')),
+                  Expanded(child: _statCard('Streak', '$streak j 🔥', Icons.local_fire_department_rounded, kYellow, streak == '0' ? 'Commence !' : 'Continue !')),
                 ]),
                 const SizedBox(height: 10),
                 _statCard('Meilleur score', '$lastScore/100', Icons.analytics_rounded, kGreen, 'Dernière analyse IA'),
@@ -2932,17 +3053,32 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
 
   Widget _buildStreakCalendar(String streakStr) {
     final streakInt = int.tryParse(streakStr) ?? 0;
-    final days = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-    final weeks = [
-      [true, true, false, true, true, false, false],
-      [true, false, true, true, false, true, false],
-      [false, true, true, false, true, true, true],
-      [true, true, false, true, false, false, false],
-    ];
-    final totalDone = weeks.expand((w) => w).where((d) => d).length;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
+    final dayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+    final now = DateTime.now();
+    final today = now.weekday - 1;
+
+    final weeks = <List<Map<String, dynamic>>>[];
+    for (int w = 3; w >= 0; w--) {
+      final week = <Map<String, dynamic>>[];
+      for (int d = 0; d < 7; d++) {
+        final date = now.subtract(Duration(days: w * 7 + (today - d)));
+        final dateStr = '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+        week.add({
+          'date': dateStr,
+          'done': widget.trainingSessions.contains(dateStr),
+          'isToday': date.year == now.year && date.month == now.month && date.day == now.day,
+          'isFuture': date.isAfter(now),
+        });
+      }
+      weeks.add(week);
+    }
+    final totalDone = weeks.expand((w) => w).where((d) => d['done'] as bool).length;
+
+    return Clickable(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TrainingCalendarPage(deviceId: widget.deviceId))),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
       child: Column(children: [
         Row(children: [
           Text('$streakInt jours', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
@@ -2952,38 +3088,102 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
           Text('$totalDone/28 ce mois', style: const TextStyle(fontSize: 12, color: kTextDim)),
         ]),
         const SizedBox(height: 14),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: days.map((d) => SizedBox(width: 28, child: Text(d, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: kTextDim, fontWeight: FontWeight.w600)))).toList()),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: dayLabels.map((d) => SizedBox(width: 28, child: Text(d, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: kTextDim, fontWeight: FontWeight.w600)))).toList()),
         const SizedBox(height: 8),
         ...weeks.map((week) => Padding(
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: week.map((done) => AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 28, height: 28,
-              decoration: BoxDecoration(
-                color: done ? kOrange : kCard2,
-                borderRadius: BorderRadius.circular(6),
-                boxShadow: done ? [BoxShadow(color: kOrange.withOpacity(0.3), blurRadius: 6)] : [],
-              ),
-              child: done ? const Icon(Icons.check_rounded, size: 14, color: Colors.white) : null,
-            )).toList(),
+            children: week.map((day) {
+              final done = day['done'] as bool;
+              final isToday = day['isToday'] as bool;
+              final isFuture = day['isFuture'] as bool;
+              return Clickable(
+                onTap: isToday && !done ? () => _confirmToggleProgress(day['date'] as String) : () {},
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(
+                    color: done ? kOrange : isToday ? kOrange.withOpacity(0.15) : kCard2,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: isToday ? kOrange : Colors.transparent),
+                    boxShadow: done ? [BoxShadow(color: kOrange.withOpacity(0.3), blurRadius: 6)] : [],
+                  ),
+                  child: done
+                      ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+                      : isToday
+                          ? const Icon(Icons.add_rounded, size: 14, color: kOrange)
+                          : isFuture ? null : const Icon(Icons.close_rounded, size: 11, color: kTextDim),
+                ),
+              );
+            }).toList(),
           ),
         )).toList(),
         const SizedBox(height: 10),
         ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: totalDone / 28, backgroundColor: kBorder, valueColor: const AlwaysStoppedAnimation(kOrange), minHeight: 4)),
       ]),
+      ),
     );
   }
 
+  void _confirmToggleProgress(String date) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: kBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('💪', style: TextStyle(fontSize: 40)),
+            const SizedBox(height: 12),
+            const Text('Séance confirmée ?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
+            const SizedBox(height: 8),
+            Text('Tu confirmes être allé à la salle aujourd\'hui ?', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5))),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(child: Clickable(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+                  child: const Center(child: Text('Annuler', style: TextStyle(fontSize: 14, color: kTextDim))),
+                ),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: Clickable(
+                onTap: () {
+                  Navigator.pop(context);
+                  widget.onToggleSession(date);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)),
+                  child: const Center(child: Text('Oui, j\'y étais !', style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600))),
+                ),
+              )),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
+
   Widget _buildBilanSemaine() {
     final days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-    final today = DateTime.now().weekday - 1;
-    final done = [true, true, false, true, false, false, false];
+    final now = DateTime.now();
+    final today = now.weekday - 1;
+    final weekDates = List.generate(7, (i) {
+      final d = now.subtract(Duration(days: today - i));
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    });
+    final done = weekDates.map((d) => widget.trainingSessions.contains(d)).toList();
     final totalDone = done.where((d) => d).length;
-    final totalVolume = 12450;
-    final bestExo = 'Squat';
-    final bestLoad = '100 kg';
+    final weight = widget.userData['weight'] ?? '--';
+    final squat = widget.userData['squat_weight'] ?? '--';
+    final bestExo = squat != '--' ? 'Squat' : '--';
+    final bestLoad = squat != '--' ? '$squat kg' : '--';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -3042,7 +3242,7 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
 
         // Stats semaine
         Row(children: [
-          _bilanStat('Volume total', '${(totalVolume / 1000).toStringAsFixed(1)} T', Icons.bar_chart_rounded, kOrange),
+          _bilanStat('Séances', '$totalDone/7', Icons.bar_chart_rounded, kOrange),
           const SizedBox(width: 10),
           _bilanStat('Meilleur exo', bestExo, Icons.emoji_events_rounded, kYellow),
           const SizedBox(width: 10),
@@ -4268,7 +4468,17 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
   bool _loadingBilan = false;
 
   final days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-  final done = [true, true, false, true, false, false, false];
+  List<String> trainingSessions = [];
+
+  Future<void> _loadSessions() async {
+    try {
+      final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: {'x-device-id': widget.deviceId});
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        setState(() => trainingSessions = data.map((e) => e['date'] as String).toList());
+      }
+    } catch (_) {}
+  }
 
   @override
   void initState() {
@@ -4276,6 +4486,7 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
     _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
     _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
     _animCtrl.forward();
+    _loadSessions();
   }
 
   @override
@@ -4284,8 +4495,19 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
     super.dispose();
   }
 
+  List<bool> _getWeekDone() {
+    final now = DateTime.now();
+    final today = now.weekday - 1;
+    final weekDates = List.generate(7, (i) {
+      final d = now.subtract(Duration(days: today - i));
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    });
+    return weekDates.map((d) => trainingSessions.contains(d)).toList();
+  }
+
   Future<void> _generateBilan() async {
     setState(() { _loadingBilan = true; _bilanIA = ''; });
+    final done = _getWeekDone();
     try {
       final name = widget.userData['name'] ?? '';
       final goal = widget.userData['goal'] ?? '';
@@ -4314,7 +4536,7 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
       });
     } catch (e) {
       setState(() {
-        _bilanIA = _generateLocalBilan(done.where((d) => d).length, widget.userData['goal'] ?? '', widget.userData['streak'] ?? '');
+        _bilanIA = _generateLocalBilan(_getWeekDone().where((d) => d).length, widget.userData['goal'] ?? '', widget.userData['streak'] ?? '');
         _loadingBilan = false;
       });
     }
@@ -4328,7 +4550,13 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.now().weekday - 1;
+    final now = DateTime.now();
+    final today = now.weekday - 1;
+    final weekDates = List.generate(7, (i) {
+      final d = now.subtract(Duration(days: today - i));
+      return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    });
+    final done = weekDates.map((d) => trainingSessions.contains(d)).toList();
     final totalDone = done.where((d) => d).length;
     final goal = widget.userData['goal'] ?? '';
     final streak = widget.userData['streak'] ?? '--';
@@ -4524,7 +4752,223 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
   ));
 }
 
+// ===================== TRAINING CALENDAR PAGE =====================
+class TrainingCalendarPage extends StatefulWidget {
+  final String deviceId;
+  const TrainingCalendarPage({super.key, required this.deviceId});
+  @override
+  State<TrainingCalendarPage> createState() => _TrainingCalendarPageState();
+}
 
+class _TrainingCalendarPageState extends State<TrainingCalendarPage> {
+  List<String> trainingSessions = [];
+  bool loading = true;
+  DateTime _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSessions();
+  }
+
+  Future<void> _loadSessions() async {
+    try {
+      final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: {'x-device-id': widget.deviceId});
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        setState(() { trainingSessions = data.map((e) => e['date'] as String).toList(); loading = false; });
+      }
+    } catch (_) { setState(() => loading = false); }
+  }
+
+  bool _isDone(DateTime date) {
+    final str = '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    return trainingSessions.contains(str);
+  }
+
+  int get _daysInMonth => DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
+  int get _firstWeekday => DateTime(_currentMonth.year, _currentMonth.month, 1).weekday; // 1=Lun
+
+  List<DateTime?> get _calendarDays {
+    final days = <DateTime?>[];
+    // Padding avant le 1er jour
+    for (int i = 1; i < _firstWeekday; i++) days.add(null);
+    for (int d = 1; d <= _daysInMonth; d++) {
+      days.add(DateTime(_currentMonth.year, _currentMonth.month, d));
+    }
+    return days;
+  }
+
+  int get _totalThisMonth {
+    int count = 0;
+    for (int d = 1; d <= _daysInMonth; d++) {
+      if (_isDone(DateTime(_currentMonth.year, _currentMonth.month, d))) count++;
+    }
+    return count;
+  }
+
+  final _monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final calDays = _calendarDays;
+    final dayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        backgroundColor: kBg,
+        title: const Text('Historique séances', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: kText),
+        elevation: 0,
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator(color: kOrange, strokeWidth: 2))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              child: Column(children: [
+                // Navigation mois
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
+                  child: Column(children: [
+                    // Header navigation
+                    Row(children: [
+                      Clickable(
+                        onTap: () => setState(() => _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1)),
+                        child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.chevron_left_rounded, color: kTextDim, size: 20)),
+                      ),
+                      Expanded(child: Center(child: Column(children: [
+                        Text('${_monthNames[_currentMonth.month - 1]} ${_currentMonth.year}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kText)),
+                        Text('$_totalThisMonth séance${_totalThisMonth > 1 ? 's' : ''}', style: const TextStyle(fontSize: 12, color: kOrange)),
+                      ]))),
+                      Clickable(
+                        onTap: () {
+                          final next = DateTime(_currentMonth.year, _currentMonth.month + 1);
+                          if (next.isBefore(DateTime(now.year, now.month + 1))) {
+                            setState(() => _currentMonth = next);
+                          }
+                        },
+                        child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.chevron_right_rounded, color: kTextDim, size: 20)),
+                      ),
+                    ]),
+                    const SizedBox(height: 16),
+
+                    // Labels jours
+                    Row(children: dayLabels.map((d) => Expanded(child: Center(child: Text(d, style: const TextStyle(fontSize: 12, color: kTextDim, fontWeight: FontWeight.w600))))).toList()),
+                    const SizedBox(height: 8),
+
+                    // Grille jours
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 6, crossAxisSpacing: 6),
+                      itemCount: calDays.length,
+                      itemBuilder: (context, i) {
+                        final day = calDays[i];
+                        if (day == null) return const SizedBox();
+                        final isDone = _isDone(day);
+                        final isToday = day.year == now.year && day.month == now.month && day.day == now.day;
+                        final isFuture = day.isAfter(now);
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          decoration: BoxDecoration(
+                            color: isDone ? kOrange : isToday ? kOrange.withOpacity(0.15) : kCard2,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: isToday ? kOrange : Colors.transparent),
+                            boxShadow: isDone ? [BoxShadow(color: kOrange.withOpacity(0.3), blurRadius: 4)] : [],
+                          ),
+                          child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                            Text('${day.day}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDone ? Colors.white : isFuture ? kTextDim.withOpacity(0.4) : kText)),
+                            if (isDone) const Icon(Icons.fitness_center_rounded, size: 8, color: Colors.white),
+                          ])),
+                        );
+                      },
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 20),
+
+                // Statistiques du mois
+                const Align(alignment: Alignment.centerLeft, child: Text('CE MOIS', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2))),
+                const SizedBox(height: 12),
+                Row(children: [
+                  _statBox('Séances', '$_totalThisMonth', kOrange),
+                  const SizedBox(width: 10),
+                  _statBox('Jours dispo', '$_daysInMonth', kBlue),
+                  const SizedBox(width: 10),
+                  _statBox('Taux', '${_daysInMonth > 0 ? (_totalThisMonth / _daysInMonth * 100).toStringAsFixed(0) : 0}%', kGreen),
+                ]),
+                const SizedBox(height: 20),
+
+                // Barre progression mensuelle
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Row(children: [
+                      const Text('Progression mensuelle', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+                      const Spacer(),
+                      Text('$_totalThisMonth / $_daysInMonth jours', style: const TextStyle(fontSize: 12, color: kTextDim)),
+                    ]),
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: _daysInMonth > 0 ? (_totalThisMonth / _daysInMonth).clamp(0.0, 1.0) : 0,
+                        backgroundColor: kBorder,
+                        valueColor: const AlwaysStoppedAnimation(kOrange),
+                        minHeight: 8,
+                      ),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 20),
+
+                // Liste des séances du mois
+                const Align(alignment: Alignment.centerLeft, child: Text('SÉANCES DU MOIS', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2))),
+                const SizedBox(height: 12),
+                ...trainingSessions.where((s) {
+                  final parts = s.split('/');
+                  if (parts.length != 3) return false;
+                  return int.tryParse(parts[1]) == _currentMonth.month && int.tryParse(parts[2]) == _currentMonth.year;
+                }).map((s) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kOrange.withOpacity(0.2))),
+                  child: Row(children: [
+                    Container(width: 8, height: 8, decoration: const BoxDecoration(color: kOrange, shape: BoxShape.circle)),
+                    const SizedBox(width: 12),
+                    const Icon(Icons.fitness_center_rounded, color: kOrange, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Séance du $s', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: kText)),
+                    const Spacer(),
+                    const Icon(Icons.check_circle_rounded, color: kOrange, size: 16),
+                  ]),
+                )).toList(),
+
+                if (trainingSessions.where((s) {
+                  final parts = s.split('/');
+                  if (parts.length != 3) return false;
+                  return int.tryParse(parts[1]) == _currentMonth.month && int.tryParse(parts[2]) == _currentMonth.year;
+                }).isEmpty)
+                  Center(child: Text('Aucune séance enregistrée ce mois', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.2)))),
+              ]),
+            ),
+    );
+  }
+
+  Widget _statBox(String label, String value, Color color) => Expanded(child: Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.2))),
+    child: Column(children: [
+      Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+      const SizedBox(height: 2),
+      Text(label, style: const TextStyle(fontSize: 10, color: kTextDim)),
+    ]),
+  ));
+}
 
 // ===================== PROFILE PAGE V2 =====================
 class ProfilePageV2 extends StatefulWidget {
