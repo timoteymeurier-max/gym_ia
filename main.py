@@ -111,6 +111,13 @@ class FoodEntry(Base):
     date = Column(String)
     created_at = Column(DateTime, default=datetime.now)
 
+class TrainingSession(Base):
+    __tablename__ = "training_sessions"
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String, default="default")
+    date = Column(String, unique=False)
+    created_at = Column(DateTime, default=datetime.now)
+
 
 Base.metadata.create_all(engine)
 
@@ -786,6 +793,33 @@ Donne des estimations réalistes."""
         print(f"Erreur analyse photo: {e}")
         return {"name": "Plat analysé", "calories": 400, "protein": 25, "carbs": 40, "fat": 12, "quantity": "1 portion", "ingredients": []}
     
+@app.get("/training-sessions/")
+async def get_training_sessions(x_device_id: str = Header(default="default")):
+    db = DBSession()
+    sessions = db.query(TrainingSession).filter(TrainingSession.device_id == x_device_id).all()
+    result = [{"id": s.id, "date": s.date} for s in sessions]
+    db.close()
+    return result
+
+@app.post("/training-sessions/")
+async def add_training_session(
+    date: str = Form(...),
+    x_device_id: str = Header(default="default")
+):
+    db = DBSession()
+    # Vérifier si déjà coché ce jour
+    existing = db.query(TrainingSession).filter(TrainingSession.device_id == x_device_id, TrainingSession.date == date).first()
+    if existing:
+        db.close()
+        return {"id": existing.id, "date": existing.date}
+    session = TrainingSession(device_id=x_device_id, date=date)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    result = {"id": session.id, "date": session.date}
+    db.close()
+    return result
+
 
 @app.get("/daily-message/")
 async def get_daily_message(x_device_id: str = Header(default="default")):

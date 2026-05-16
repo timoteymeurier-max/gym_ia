@@ -2083,7 +2083,10 @@ class NutritionPageV2 extends StatelessWidget {
         Text('Alimentation & Recettes', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.35))),
         const SizedBox(height: 24),
         // Calories du jour
-        _buildCaloriesCard(),
+        Clickable(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NutritionTodayPage(deviceId: deviceId))),
+          child: _buildCaloriesCard(),
+        ),
         const SizedBox(height: 20),
         // 2 grands widgets
         _hubCard(context, icon: Icons.restaurant_rounded, color: kGreen, title: 'Recettes prédéfinies', description: 'Repas équilibrés adaptés à tes objectifs', tag: '${mockRecipes.length} recettes', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RecipesPage()))),
@@ -3800,6 +3803,454 @@ class _ExerciseProgressCard extends StatelessWidget {
   }
 }
 
+// ===================== NUTRITION TODAY PAGE =====================
+class NutritionTodayPage extends StatefulWidget {
+  final String deviceId;
+  const NutritionTodayPage({super.key, required this.deviceId});
+  @override
+  State<NutritionTodayPage> createState() => _NutritionTodayPageState();
+}
+
+class _NutritionTodayPageState extends State<NutritionTodayPage> with SingleTickerProviderStateMixin {
+  List<Map<String, dynamic>> entries = [];
+  bool loading = true;
+  late AnimationController _animCtrl;
+  late Animation<double> _anim;
+
+  final String today = DateTime.now().toString().substring(0, 10).split('-').reversed.join('/');
+
+  // Objectifs journaliers
+  final int targetCalories = 2400;
+  final int targetProtein = 180;
+  final int targetCarbs = 240;
+  final int targetFat = 80;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
+    _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
+    loadEntries();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> loadEntries() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/food-entries/?date=${Uri.encodeComponent(today)}'),
+        headers: {'x-device-id': widget.deviceId},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        setState(() { entries = data.map((e) => Map<String, dynamic>.from(e)).toList(); loading = false; });
+        _animCtrl.forward();
+      }
+    } catch (e) {
+      setState(() => loading = false);
+    }
+  }
+
+  Future<void> deleteEntry(int id) async {
+    await http.delete(Uri.parse('$kBaseUrl/food-entries/$id'), headers: {'x-device-id': widget.deviceId});
+    loadEntries();
+  }
+
+  double get totalCalories => entries.fold(0, (sum, e) => sum + (e['calories'] as num? ?? 0).toDouble());
+  double get totalProtein => entries.fold(0, (sum, e) => sum + (e['protein'] as num? ?? 0).toDouble());
+  double get totalCarbs => entries.fold(0, (sum, e) => sum + (e['carbs'] as num? ?? 0).toDouble());
+  double get totalFat => entries.fold(0, (sum, e) => sum + (e['fat'] as num? ?? 0).toDouble());
+
+  List<Map<String, dynamic>> entriesForMeal(String mealType) =>
+      entries.where((e) => e['meal_type'] == mealType).toList();
+
+  void _showAddEntryDialog({Map<String, dynamic>? prefilled}) {
+    final nameCtrl = TextEditingController(text: prefilled?['name'] ?? '');
+    final calCtrl = TextEditingController(text: prefilled?['calories']?.toString() ?? '');
+    final protCtrl = TextEditingController(text: prefilled?['protein']?.toString() ?? '');
+    final carbsCtrl = TextEditingController(text: prefilled?['carbs']?.toString() ?? '');
+    final fatCtrl = TextEditingController(text: prefilled?['fat']?.toString() ?? '');
+    final qtyCtrl = TextEditingController(text: prefilled?['quantity'] ?? '');
+    String selectedMeal = 'dejeuner';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          backgroundColor: kBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+              Row(children: [
+                const Text('🍽️', style: TextStyle(fontSize: 24)),
+                const SizedBox(width: 10),
+                const Expanded(child: Text('Ajouter un aliment', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText))),
+                Clickable(onTap: () => Navigator.pop(context), child: const Icon(Icons.close_rounded, color: kTextDim, size: 20)),
+              ]),
+              const SizedBox(height: 20),
+
+              // Type de repas
+              const Text('REPAS', style: TextStyle(fontSize: 11, color: Color(0xFF666666), fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  {'key': 'petit_dejeuner', 'label': '🌅 Petit déj', 'color': kYellow},
+                  {'key': 'dejeuner', 'label': '☀️ Déjeuner', 'color': kOrange},
+                  {'key': 'diner', 'label': '🌙 Dîner', 'color': kBlue},
+                  {'key': 'collation', 'label': '🍎 Collation', 'color': kGreen},
+                ].map((m) => Clickable(
+                  onTap: () => setDialogState(() => selectedMeal = m['key'] as String),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: selectedMeal == m['key'] ? (m['color'] as Color) : kCard2,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: selectedMeal == m['key'] ? (m['color'] as Color) : kBorder),
+                    ),
+                    child: Text(m['label'] as String, style: TextStyle(fontSize: 12, color: selectedMeal == m['key'] ? Colors.white : kTextDim, fontWeight: selectedMeal == m['key'] ? FontWeight.w600 : FontWeight.normal)),
+                  ),
+                )).toList()),
+              ),
+              const SizedBox(height: 16),
+
+              _dialogField('NOM', nameCtrl, hint: 'Ex: Poulet grillé'),
+              _dialogField('QUANTITÉ', qtyCtrl, hint: 'Ex: 200g, 1 portion'),
+              Row(children: [
+                Expanded(child: _dialogField('CALORIES', calCtrl, hint: '350', type: TextInputType.number)),
+                const SizedBox(width: 10),
+                Expanded(child: _dialogField('PROTÉINES (g)', protCtrl, hint: '30', type: TextInputType.number)),
+              ]),
+              Row(children: [
+                Expanded(child: _dialogField('GLUCIDES (g)', carbsCtrl, hint: '40', type: TextInputType.number)),
+                const SizedBox(width: 10),
+                Expanded(child: _dialogField('LIPIDES (g)', fatCtrl, hint: '10', type: TextInputType.number)),
+              ]),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (nameCtrl.text.isEmpty) return;
+                    Navigator.pop(context);
+                    final req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/food-entries/'));
+                    req.headers['x-device-id'] = widget.deviceId;
+                    req.fields['name'] = nameCtrl.text;
+                    req.fields['calories'] = calCtrl.text.isNotEmpty ? calCtrl.text : '0';
+                    req.fields['protein'] = protCtrl.text.isNotEmpty ? protCtrl.text : '0';
+                    req.fields['carbs'] = carbsCtrl.text.isNotEmpty ? carbsCtrl.text : '0';
+                    req.fields['fat'] = fatCtrl.text.isNotEmpty ? fatCtrl.text : '0';
+                    req.fields['quantity'] = qtyCtrl.text;
+                    req.fields['meal_type'] = selectedMeal;
+                    req.fields['date'] = today;
+                    await req.send();
+                    loadEntries();
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                  child: const Text('Enregistrer', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _analyzePhoto() async {
+    FilePickerResult? picked = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+    if (picked == null || picked.files.single.bytes == null) return;
+
+    // Afficher loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: kBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: const Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            CircularProgressIndicator(color: kOrange, strokeWidth: 2),
+            SizedBox(height: 16),
+            Text('Analyse du plat en cours...', style: TextStyle(fontSize: 14, color: kTextDim)),
+          ]),
+        ),
+      ),
+    );
+
+    try {
+      final req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/analyze-food-photo/'));
+      req.headers['x-device-id'] = widget.deviceId;
+      req.files.add(http.MultipartFile.fromBytes('file', picked.files.single.bytes!, filename: picked.files.single.name));
+      final res = await req.send();
+      final body = await res.stream.bytesToString();
+      final data = jsonDecode(body) as Map<String, dynamic>;
+
+      if (mounted) Navigator.pop(context); // Ferme loading
+
+      // Ouvre le dialog avec les données préfillées
+      _showAddEntryDialog(prefilled: data);
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
+  Widget _dialogField(String label, TextEditingController ctrl, {String? hint, TextInputType? type}) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF666666), fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+      const SizedBox(height: 6),
+      TextField(
+        controller: ctrl, keyboardType: type,
+        style: const TextStyle(color: kText, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: hint, hintStyle: const TextStyle(color: Color(0xFF444444), fontSize: 14),
+          filled: true, fillColor: kCard2,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kBorder)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kGreen, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
+      ),
+      const SizedBox(height: 14),
+    ]);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final meals = [
+      {'key': 'petit_dejeuner', 'label': 'Petit déjeuner', 'icon': '🌅', 'color': kYellow},
+      {'key': 'dejeuner', 'label': 'Déjeuner', 'icon': '☀️', 'color': kOrange},
+      {'key': 'diner', 'label': 'Dîner', 'icon': '🌙', 'color': kBlue},
+      {'key': 'collation', 'label': 'Collation', 'icon': '🍎', 'color': kGreen},
+    ];
+
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        backgroundColor: kBg,
+        title: const Text('Nutrition aujourd\'hui', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: kText),
+        elevation: 0,
+        actions: [
+          // Bouton photo
+          Clickable(
+            onTap: _analyzePhoto,
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: kPurple.withOpacity(0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: kPurple.withOpacity(0.3))),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.camera_alt_rounded, color: kPurple, size: 16),
+                SizedBox(width: 4),
+                Text('Analyser', style: TextStyle(color: kPurple, fontSize: 12, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+          // Bouton ajouter
+          Clickable(
+            onTap: () => _showAddEntryDialog(),
+            child: Container(
+              margin: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: kGreen, borderRadius: BorderRadius.circular(10)),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                SizedBox(width: 4),
+                Text('Ajouter', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+        ],
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator(color: kGreen, strokeWidth: 2))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Résumé calories du jour
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: kCard,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: kGreen.withOpacity(0.2)),
+                    gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [kGreen.withOpacity(0.05), Colors.transparent]),
+                  ),
+                  child: Column(children: [
+                    Row(children: [
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('${totalCalories.toStringAsFixed(0)}', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: kText)),
+                        const Text('/ 2400 kcal', style: TextStyle(fontSize: 13, color: kTextDim)),
+                      ]),
+                      const Spacer(),
+                      // Anneau calories
+                      SizedBox(
+                        width: 70, height: 70,
+                        child: AnimatedBuilder(
+                          animation: _anim,
+                          builder: (context, child) => CustomPaint(
+                            painter: _RingPainter(
+                              progress: ((totalCalories / targetCalories) * _anim.value).clamp(0.0, 1.0),
+                              color: totalCalories > targetCalories ? kRed : kGreen,
+                              strokeWidth: 6,
+                            ),
+                            child: Center(child: Text(
+                              '${(totalCalories / targetCalories * 100).toStringAsFixed(0)}%',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText),
+                            )),
+                          ),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 16),
+                    AnimatedBuilder(
+                      animation: _anim,
+                      builder: (context, child) => ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: ((totalCalories / targetCalories) * _anim.value).clamp(0.0, 1.0),
+                          backgroundColor: kBorder,
+                          valueColor: AlwaysStoppedAnimation(totalCalories > targetCalories ? kRed : kGreen),
+                          minHeight: 8,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Macros
+                    Row(children: [
+                      _macroCard('Protéines', totalProtein, targetProtein, kGreen),
+                      const SizedBox(width: 8),
+                      _macroCard('Glucides', totalCarbs, targetCarbs, kBlue),
+                      const SizedBox(width: 8),
+                      _macroCard('Lipides', totalFat, targetFat, kYellow),
+                    ]),
+                  ]),
+                ),
+                const SizedBox(height: 20),
+
+                // Bouton analyser photo
+                Clickable(
+                  onTap: _analyzePhoto,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: kPurple.withOpacity(0.07),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: kPurple.withOpacity(0.3)),
+                    ),
+                    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.camera_alt_rounded, color: kPurple, size: 20),
+                      SizedBox(width: 10),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Analyser une photo', style: TextStyle(fontSize: 14, color: kPurple, fontWeight: FontWeight.w600)),
+                        Text('Prends une photo de ton plat → calories estimées', style: TextStyle(fontSize: 11, color: kTextDim)),
+                      ]),
+                    ]),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Repas par catégorie
+                ...meals.map((meal) {
+                  final mealEntries = entriesForMeal(meal['key'] as String);
+                  final mealCal = mealEntries.fold(0.0, (sum, e) => sum + (e['calories'] as num? ?? 0).toDouble());
+                  final color = meal['color'] as Color;
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: color.withOpacity(0.2))),
+                    child: Column(children: [
+                      // Header repas
+                      Clickable(
+                        onTap: () => _showAddEntryDialog(),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.07),
+                            borderRadius: const BorderRadius.only(topLeft: Radius.circular(18), topRight: Radius.circular(18)),
+                          ),
+                          child: Row(children: [
+                            Text(meal['icon'] as String, style: const TextStyle(fontSize: 20)),
+                            const SizedBox(width: 10),
+                            Text(meal['label'] as String, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+                            const Spacer(),
+                            if (mealCal > 0) Text('${mealCal.toStringAsFixed(0)} kcal', style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 8),
+                            Icon(Icons.add_circle_outline_rounded, color: color.withOpacity(0.6), size: 20),
+                          ]),
+                        ),
+                      ),
+
+                      // Aliments
+                      if (mealEntries.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text('Aucun aliment · Appuie sur + pour ajouter', style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.2))),
+                        )
+                      else
+                        ...mealEntries.map((entry) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: kBorder.withOpacity(0.4)))),
+                          child: Row(children: [
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(entry['name'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+                              if (entry['quantity'] != null && (entry['quantity'] as String).isNotEmpty)
+                                Text(entry['quantity'] as String, style: const TextStyle(fontSize: 11, color: kTextDim)),
+                            ])),
+                            Row(children: [
+                              if (entry['calories'] != null && (entry['calories'] as num) > 0)
+                                _chip('${(entry['calories'] as num).toStringAsFixed(0)} kcal', kOrange),
+                              if (entry['protein'] != null && (entry['protein'] as num) > 0) ...[
+                                const SizedBox(width: 4),
+                                _chip('${(entry['protein'] as num).toStringAsFixed(0)}g P', kGreen),
+                              ],
+                            ]),
+                            const SizedBox(width: 8),
+                            Clickable(onTap: () => deleteEntry(entry['id']), child: Icon(Icons.close_rounded, size: 16, color: Colors.white.withOpacity(0.2))),
+                          ]),
+                        )).toList(),
+                    ]),
+                  );
+                }).toList(),
+              ]),
+            ),
+    );
+  }
+
+  Widget _macroCard(String label, double value, int target, Color color) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+      child: Column(children: [
+        Text('${value.toStringAsFixed(0)}g', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
+        Text('/ ${target}g', style: const TextStyle(fontSize: 10, color: kTextDim)),
+        const SizedBox(height: 4),
+        ClipRRect(borderRadius: BorderRadius.circular(3), child: LinearProgressIndicator(
+          value: (value / target).clamp(0.0, 1.0),
+          backgroundColor: color.withOpacity(0.15),
+          valueColor: AlwaysStoppedAnimation(color),
+          minHeight: 3,
+        )),
+        const SizedBox(height: 2),
+        Text(label, style: const TextStyle(fontSize: 9, color: kTextDim)),
+      ]),
+    ),
+  );
+
+  Widget _chip(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+    child: Text(text, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
+  );
+}
 
 // ===================== BILAN SEMAINE PAGE =====================
 class BilanSemainePage extends StatefulWidget {
