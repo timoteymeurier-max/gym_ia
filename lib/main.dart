@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:async';
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(const MyApp());
@@ -772,8 +773,6 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
   Widget _buildPerfsRow(String squat, String streak, String score) {
     return Row(children: [
       Expanded(child: _perfCard('Streak', streak != '--' ? '$streak j 🔥' : '--', Icons.local_fire_department_rounded, kYellow)),
-      const SizedBox(width: 10),
-      Expanded(child: _perfCard('Score IA', score != '--' ? '$score/100' : '--', Icons.analytics_rounded, kGreen)),
     ]);
   }
 
@@ -937,7 +936,7 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
 
   Widget _buildQuickActions() {
     final actions = [
-      {'label': 'Analyser un exo', 'icon': Icons.videocam_rounded, 'color': kOrange, 'tab': 1, 'msg': 'Analyse mon exercice'},
+      {'label': 'Analyser un exo', 'icon': Icons.videocam_rounded, 'color': kOrange, 'tab': 1, 'msg': null},
       {'label': 'Programme IA', 'icon': Icons.auto_awesome_rounded, 'color': kPurple, 'tab': -1, 'msg': 'ai_programs'},
       {'label': 'Bilan semaine', 'icon': Icons.bar_chart_rounded, 'color': kBlue, 'tab': -1, 'msg': 'bilan_semaine'},
       {'label': 'Plans nutrition IA', 'icon': Icons.restaurant_rounded, 'color': kGreen, 'tab': -1, 'msg': 'ai_nutrition'},
@@ -1037,6 +1036,7 @@ class _CoachPageV2State extends State<CoachPageV2> {
   int? activeConvId;
   bool sidebarOpen = true;
   String? _pendingSuggestion;
+  bool _showWelcome = true;
 
   Map<String, String> get _headers => {'x-device-id': widget.deviceId};
 
@@ -1049,7 +1049,7 @@ class _CoachPageV2State extends State<CoachPageV2> {
   @override
   void didUpdateWidget(CoachPageV2 oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.pendingMessage != null && widget.pendingMessage != oldWidget.pendingMessage) {
+    if (widget.pendingMessage != null && widget.pendingMessage != oldWidget.pendingMessage && activeConvId == null) {
       createNewConversation(suggestion: widget.pendingMessage).then((_) {
         widget.onMessageConsumed();
       });
@@ -1073,15 +1073,53 @@ class _CoachPageV2State extends State<CoachPageV2> {
       var res = await req.send();
       var body = await res.stream.bytesToString();
       final data = jsonDecode(body);
-      setState(() { conversations.insert(0, Map<String, dynamic>.from(data)); activeConvId = data['id']; _pendingSuggestion = suggestion; });
+      setState(() {
+        conversations.insert(0, Map<String, dynamic>.from(data));
+        activeConvId = data['id'];
+        _pendingSuggestion = suggestion;
+        _showWelcome = suggestion == null;
+      });
     } catch (_) {}
   }
 
   Future<void> deleteConversation(int id) async {
-    try {
-      await http.delete(Uri.parse('$kBaseUrl/conversations/$id'), headers: _headers);
-      setState(() { conversations.removeWhere((c) => c['id'] == id); if (activeConvId == id) activeConvId = null; });
-    } catch (_) {}
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: kBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('🗑️', style: TextStyle(fontSize: 36)),
+            const SizedBox(height: 12),
+            const Text('Supprimer la conversation ?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kText)),
+            const SizedBox(height: 8),
+            Text('Cette action est irréversible.', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.4))),
+            const SizedBox(height: 20),
+            Row(children: [
+              Expanded(child: Clickable(
+                onTap: () => Navigator.pop(context, false),
+                child: Container(padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+                  child: const Center(child: Text('Annuler', style: TextStyle(fontSize: 14, color: kTextDim)))),
+              )),
+              const SizedBox(width: 12),
+              Expanded(child: Clickable(
+                onTap: () => Navigator.pop(context, true),
+                child: Container(padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: kRed, borderRadius: BorderRadius.circular(12)),
+                  child: const Center(child: Text('Supprimer', style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600)))),
+              )),
+            ]),
+          ]),
+        ),
+      ),
+    );
+    if (confirm == true) {
+      try {
+        await http.delete(Uri.parse('$kBaseUrl/conversations/$id'), headers: _headers);
+        setState(() { conversations.removeWhere((c) => c['id'] == id); if (activeConvId == id) activeConvId = null; });
+      } catch (_) {}
+    }
   }
 
   @override
@@ -1094,13 +1132,14 @@ class _CoachPageV2State extends State<CoachPageV2> {
       ),
       Expanded(child: Column(children: [
         _buildHeader(),
-        Expanded(child: activeConvId == null ? _buildWelcome() : ChatViewV2(
+        Expanded(child: (activeConvId == null || _showWelcome) ? _buildWelcome() : ChatViewV2(
           key: ValueKey(activeConvId),
           convId: activeConvId!,
           deviceId: widget.deviceId,
           initialMessage: _pendingSuggestion,
           onTitleUpdate: (title) => setState(() { _pendingSuggestion = null; final idx = conversations.indexWhere((c) => c['id'] == activeConvId); if (idx != -1) conversations[idx]['title'] = title; }),
           onMessageSent: widget.onMessageSent,
+          onCancelled: () => setState(() { _showWelcome = true; conversations.removeWhere((c) => c['id'] == activeConvId); activeConvId = null; }),
         )),
       ])),
     ]));
@@ -1192,7 +1231,7 @@ class _CoachPageV2State extends State<CoachPageV2> {
           Text('Ton coach sportif IA personnel', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3))),
           const SizedBox(height: 32),
           Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: suggestions.map((s) => Clickable(
-            onTap: () => createNewConversation(suggestion: s['text'] as String),
+            onTap: () { setState(() => _showWelcome = false); createNewConversation(suggestion: s['text'] as String); },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(color: (s['color'] as Color).withOpacity(0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: (s['color'] as Color).withOpacity(0.2))),
@@ -1210,11 +1249,12 @@ class _CoachPageV2State extends State<CoachPageV2> {
   }
 
   Widget _buildInputBar() => Container(
-    padding: const EdgeInsets.fromLTRB(14, 14, 14, 90),
+    padding: const EdgeInsets.fromLTRB(14, 14, 14, 110),
     decoration: BoxDecoration(color: const Color(0xFF0D0D0D), border: Border(top: BorderSide(color: kBorder))),
     child: Row(children: [
       Expanded(child: TextField(
         style: const TextStyle(color: kText, fontSize: 14),
+        textInputAction: TextInputAction.send,
         decoration: InputDecoration(
           hintText: 'Pose une question à ton coach...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
           filled: true, fillColor: kCard2,
@@ -1223,10 +1263,10 @@ class _CoachPageV2State extends State<CoachPageV2> {
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
-        onSubmitted: (val) { if (val.trim().isNotEmpty) createNewConversation(suggestion: val.trim()); },
+        onSubmitted: (val) { if (val.trim().isNotEmpty) { setState(() => _showWelcome = false); createNewConversation(suggestion: val.trim()); } },
       )),
       const SizedBox(width: 8),
-      Clickable(onTap: () => createNewConversation(), child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 17))),
+      Clickable(onTap: () { setState(() => _showWelcome = false); createNewConversation(); }, child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 17))),
     ]),
   );
 }
@@ -1238,16 +1278,19 @@ class ChatViewV2 extends StatefulWidget {
   final VoidCallback onMessageSent;
   final String? initialMessage;
   final String deviceId;
-  const ChatViewV2({super.key, required this.convId, required this.onTitleUpdate, required this.onMessageSent, this.initialMessage, required this.deviceId});
+  final VoidCallback? onCancelled;
+  const ChatViewV2({super.key, required this.convId, required this.onTitleUpdate, required this.onMessageSent, this.initialMessage, required this.deviceId, this.onCancelled});
   @override
   State<ChatViewV2> createState() => _ChatViewV2State();
 }
+
 
 class _ChatViewV2State extends State<ChatViewV2> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   List<Map<String, dynamic>> messages = [];
   bool isLoading = false;
+  bool _cancelled = false;
   Uint8List? pendingVideoBytes;
   String? pendingVideoName;
 
@@ -1287,6 +1330,7 @@ class _ChatViewV2State extends State<ChatViewV2> {
     final vb = pendingVideoBytes; final vn = pendingVideoName;
     pendingVideoBytes = null; pendingVideoName = null;
     _scrollToBottom();
+    _cancelled = false;
     try {
       var req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/conversations/${widget.convId}/chat'));
       req.headers.addAll(_headers);
@@ -1297,12 +1341,22 @@ class _ChatViewV2State extends State<ChatViewV2> {
       var res = await req.send();
       var body = await res.stream.bytesToString();
       final j = jsonDecode(body);
-      setState(() { messages.add({'role': 'assistant', 'content': j['response'] ?? '', 'video_filename': null}); isLoading = false; });
-      if (messages.length == 2) widget.onTitleUpdate(displayText.length > 40 ? '${displayText.substring(0, 40)}...' : displayText);
-      widget.onMessageSent();
-      _scrollToBottom();
+      if (!_cancelled) {
+        setState(() { messages.add({'role': 'assistant', 'content': j['response'] ?? '', 'video_filename': null}); isLoading = false; });
+        if (messages.length == 2) widget.onTitleUpdate(displayText.length > 40 ? '${displayText.substring(0, 40)}...' : displayText);
+        widget.onMessageSent();
+        _scrollToBottom();
+      } else {
+        setState(() { messages.removeLast(); isLoading = false; _cancelled = false; });
+        if (messages.isEmpty) widget.onCancelled?.call();
+      }
     } catch (_) {
-      setState(() { messages.add({'role': 'assistant', 'content': 'Erreur de connexion.', 'video_filename': null}); isLoading = false; });
+      if (!_cancelled) {
+        setState(() { messages.add({'role': 'assistant', 'content': 'Erreur de connexion.', 'video_filename': null}); isLoading = false; });
+      } else {
+        setState(() { messages.removeLast(); isLoading = false; _cancelled = false; });
+        if (messages.isEmpty) widget.onCancelled?.call();
+      }
     }
   }
 
@@ -1376,7 +1430,7 @@ class _ChatViewV2State extends State<ChatViewV2> {
             },
           )),
       Container(
-        padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 110),
         decoration: BoxDecoration(color: const Color(0xFF0D0D0D), border: Border(top: BorderSide(color: kBorder))),
         child: Column(children: [
           if (pendingVideoName != null) Container(
@@ -1392,22 +1446,47 @@ class _ChatViewV2State extends State<ChatViewV2> {
           ),
           Row(children: [
             MouseRegion(cursor: SystemMouseCursors.click, child: IconButton(onPressed: pickVideo, icon: const Icon(Icons.videocam_rounded, color: kOrange, size: 20))),
-            Expanded(child: TextField(
-              controller: _controller,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              maxLines: 5, minLines: 1,
-              decoration: InputDecoration(
-                hintText: 'Pose une question...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
-                filled: true, fillColor: kCard2,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
-                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            Expanded(child: KeyboardListener(
+              focusNode: FocusNode(),
+              onKeyEvent: (event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.enter &&
+                    !HardwareKeyboard.instance.isShiftPressed) {
+                  if (!isLoading) sendMessage();
+                }
+              },
+              child: TextField(
+                controller: _controller,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                maxLines: 5, minLines: 1,
+                decoration: InputDecoration(
+                  hintText: 'Pose une question...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 14),
+                  filled: true, fillColor: kCard2,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
               ),
-              onSubmitted: (_) => sendMessage(),
             )),
             const SizedBox(width: 8),
-            Clickable(onTap: sendMessage, child: Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: isLoading ? kOrange.withOpacity(0.3) : kOrange, borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.send_rounded, color: Colors.white, size: 17))),
+            Clickable(
+              onTap: isLoading
+                  ? () => setState(() { _cancelled = true; })
+                  : sendMessage,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: isLoading ? kRed.withOpacity(0.8) : kOrange,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isLoading ? Icons.stop_rounded : Icons.send_rounded,
+                  color: Colors.white, size: 17,
+                ),
+              ),
+            ),
           ]),
         ]),
       ),
@@ -2189,10 +2268,52 @@ class AIProgramDetailPage extends StatelessWidget {
 }
 
 // ===================== NUTRITION PAGE V2 =====================
-class NutritionPageV2 extends StatelessWidget {
+class NutritionPageV2 extends StatefulWidget {
   final Map<String, String> userData;
   final String deviceId;
   const NutritionPageV2({super.key, required this.userData, required this.deviceId});
+  @override
+  State<NutritionPageV2> createState() => _NutritionPageV2State();
+}
+
+class _NutritionPageV2State extends State<NutritionPageV2> {
+  double _totalCalories = 0;
+  double _totalProtein = 0;
+  double _totalCarbs = 0;
+  double _totalFat = 0;
+  final int targetCalories = 2400;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTodayEntries();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadTodayEntries();
+  }
+
+  Future<void> _loadTodayEntries() async {
+    try {
+      final today = DateTime.now().toString().substring(0, 10).split('-').reversed.join('/');
+      final response = await http.get(
+        Uri.parse('$kBaseUrl/food-entries/?date=${Uri.encodeComponent(today)}'),
+        headers: {'x-device-id': widget.deviceId},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        final entries = data.map((e) => Map<String, dynamic>.from(e)).toList();
+        setState(() {
+          _totalCalories = entries.fold(0, (sum, e) => sum + (e['calories'] as num? ?? 0).toDouble());
+          _totalProtein = entries.fold(0, (sum, e) => sum + (e['protein'] as num? ?? 0).toDouble());
+          _totalCarbs = entries.fold(0, (sum, e) => sum + (e['carbs'] as num? ?? 0).toDouble());
+          _totalFat = entries.fold(0, (sum, e) => sum + (e['fat'] as num? ?? 0).toDouble());
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2205,19 +2326,23 @@ class NutritionPageV2 extends StatelessWidget {
         const SizedBox(height: 24),
         // Calories du jour
         Clickable(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NutritionTodayPage(deviceId: deviceId))),
+          onTap: () async {
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => NutritionTodayPage(deviceId: widget.deviceId)));
+            _loadTodayEntries();
+          },
           child: _buildCaloriesCard(),
         ),
         const SizedBox(height: 20),
         // 2 grands widgets
         _hubCard(context, icon: Icons.restaurant_rounded, color: kGreen, title: 'Recettes prédéfinies', description: 'Repas équilibrés adaptés à tes objectifs', tag: '${mockRecipes.length} recettes', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RecipesPage()))),
         const SizedBox(height: 14),
-        _hubCard(context, icon: Icons.auto_awesome_rounded, color: kOrange, title: 'Plans nutrition IA', description: 'Plans alimentaires générés par ton coach IA', tag: 'Personnalisé', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AINutritionPage(deviceId: deviceId)))),
+        _hubCard(context, icon: Icons.auto_awesome_rounded, color: kOrange, title: 'Plans nutrition IA', description: 'Plans alimentaires générés par ton coach IA', tag: 'Personnalisé', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AINutritionPage(deviceId: widget.deviceId)))),
       ]),
     ));
   }
 
   Widget _buildCaloriesCard() {
+    final progress = (_totalCalories / targetCalories).clamp(0.0, 1.0);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(20), border: Border.all(color: kBorder)),
@@ -2225,18 +2350,20 @@ class NutritionPageV2 extends StatelessWidget {
         Row(children: [
           const Text("AUJOURD'HUI", style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const Spacer(),
-          Text('Appuie pour voir le détail', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3))),
+          Text('${_totalCalories.toStringAsFixed(0)} / $targetCalories kcal', style: const TextStyle(fontSize: 13, color: kTextMid)),
         ]),
         const SizedBox(height: 12),
-        ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: 0, backgroundColor: kBorder, valueColor: const AlwaysStoppedAnimation(kGreen), minHeight: 8)),
+        ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: progress, backgroundColor: kBorder, valueColor: const AlwaysStoppedAnimation(kGreen), minHeight: 8)),
         const SizedBox(height: 14),
         Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-          _macro('Protéines', '0g', kGreen),
-          _macro('Glucides', '0g', kBlue),
-          _macro('Lipides', '0g', kYellow),
+          _macro('Protéines', '${_totalProtein.toStringAsFixed(0)}g', kGreen),
+          _macro('Glucides', '${_totalCarbs.toStringAsFixed(0)}g', kBlue),
+          _macro('Lipides', '${_totalFat.toStringAsFixed(0)}g', kYellow),
         ]),
-        const SizedBox(height: 8),
-        Text('Ajoute tes repas pour suivre tes macros', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.2))),
+        if (_totalCalories == 0) ...[
+          const SizedBox(height: 8),
+          Text('Ajoute tes repas pour suivre tes macros', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.2))),
+        ],
       ]),
     );
   }
@@ -2796,57 +2923,44 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
           const SizedBox(height: 16),
 
 
-          // Stats rapides avec poids cliquable
+          // Stats rapides
           const Text('STATS RAPIDES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
           const SizedBox(height: 12),
-          Row(children: [
-            // Carte poids avec mini courbe
-            Expanded(
-              flex: 2,
-              child: Clickable(
-                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => WeightDetailPage(history: weightHistory))),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: kCard,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: kBlue.withOpacity(0.3)),
-                    gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [kBlue.withOpacity(0.06), Colors.transparent]),
-                  ),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      Icon(Icons.monitor_weight_outlined, color: kBlue, size: 16),
-                      const Spacer(),
-                      const Icon(Icons.arrow_forward_ios_rounded, color: kTextDim, size: 10),
-                    ]),
-                    const SizedBox(height: 6),
-                    Text(weight != '--' ? '$weight kg' : '--', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
-                    const Text('Poids', style: TextStyle(fontSize: 11, color: kTextDim)),
-                    const SizedBox(height: 8),
-                    // Mini courbe
-                    if (weightHistory.length >= 2)
-                      SizedBox(
-                        height: 36,
-                        child: CustomPaint(painter: _MiniCurvePainter(weightHistory, kBlue), size: Size.infinite),
-                      ),
-                  ]),
-                ),
+          // Poids pleine largeur
+          Clickable(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => WeightDetailPage(history: weightHistory))),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: kCard,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kBlue.withOpacity(0.3)),
+                gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [kBlue.withOpacity(0.06), Colors.transparent]),
               ),
-            ),
-            const SizedBox(width: 10),
-            // Autres stats
-            Expanded(
-              flex: 3,
-              child: Column(children: [
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Expanded(child: _statCard('Séances', '$sessions/sem', Icons.bolt_rounded, kOrange, 'Cette semaine')),
-                  const SizedBox(width: 10),
-                  Expanded(child: _statCard('Streak', '$streak j 🔥', Icons.local_fire_department_rounded, kYellow, streak == '0' ? 'Commence !' : 'Continue !')),
+                  Icon(Icons.monitor_weight_outlined, color: kBlue, size: 16),
+                  const SizedBox(width: 8),
+                  Text(weight != '--' ? '$weight kg' : '--', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
+                  const SizedBox(width: 6),
+                  const Text('Poids', style: TextStyle(fontSize: 11, color: kTextDim)),
+                  const Spacer(),
+                  const Icon(Icons.arrow_forward_ios_rounded, color: kTextDim, size: 10),
                 ]),
-                const SizedBox(height: 10),
-                _statCard('Meilleur score', '$lastScore/100', Icons.analytics_rounded, kGreen, 'Dernière analyse IA'),
+                if (weightHistory.length >= 2) ...[
+                  const SizedBox(height: 10),
+                  SizedBox(height: 50, child: CustomPaint(painter: _MiniCurvePainter(weightHistory, kBlue), size: Size.infinite)),
+                ],
               ]),
             ),
+          ),
+          const SizedBox(height: 10),
+          // Séances + Streak
+          Row(children: [
+            Expanded(child: _statCard('Séances', '$sessions/sem', Icons.bolt_rounded, kOrange, 'Cette semaine')),
+            const SizedBox(width: 10),
+            Expanded(child: _statCard('Streak', '$streak j 🔥', Icons.local_fire_department_rounded, kYellow, streak == '0' ? 'Commence !' : 'Continue !')),
           ]),
           const SizedBox(height: 24),
 
@@ -4239,20 +4353,21 @@ class _NutritionTodayPageState extends State<NutritionTodayPage> with SingleTick
         iconTheme: const IconThemeData(color: kText),
         elevation: 0,
         actions: [
-          // Bouton photo
+          // Bouton historique
           Clickable(
-            onTap: _analyzePhoto,
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => NutritionHistoryPage(deviceId: widget.deviceId))),
             child: Container(
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: kPurple.withOpacity(0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: kPurple.withOpacity(0.3))),
+              decoration: BoxDecoration(color: kBlue.withOpacity(0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: kBlue.withOpacity(0.3))),
               child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.camera_alt_rounded, color: kPurple, size: 16),
+                Icon(Icons.calendar_month_rounded, color: kBlue, size: 16),
                 SizedBox(width: 4),
-                Text('Analyser', style: TextStyle(color: kPurple, fontSize: 12, fontWeight: FontWeight.w600)),
+                Text('Historique', style: TextStyle(color: kBlue, fontSize: 12, fontWeight: FontWeight.w600)),
               ]),
             ),
           ),
+        
           // Bouton ajouter
           Clickable(
             onTap: () => _showAddEntryDialog(),
@@ -4452,6 +4567,197 @@ class _NutritionTodayPageState extends State<NutritionTodayPage> with SingleTick
   );
 }
 
+// ===================== NUTRITION HISTORY PAGE =====================
+class NutritionHistoryPage extends StatefulWidget {
+  final String deviceId;
+  const NutritionHistoryPage({super.key, required this.deviceId});
+  @override
+  State<NutritionHistoryPage> createState() => _NutritionHistoryPageState();
+}
+
+class _NutritionHistoryPageState extends State<NutritionHistoryPage> {
+  Map<String, List<Map<String, dynamic>>> _entriesByDate = {};
+  bool loading = true;
+  DateTime _currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  String? _selectedDate;
+
+  final _monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllEntries();
+  }
+
+  Future<void> _loadAllEntries() async {
+    try {
+      final response = await http.get(Uri.parse('$kBaseUrl/food-entries/'), headers: {'x-device-id': widget.deviceId});
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        final map = <String, List<Map<String, dynamic>>>{};
+        for (final e in data) {
+          final date = e['date'] as String? ?? '';
+          map.putIfAbsent(date, () => []).add(Map<String, dynamic>.from(e));
+        }
+        setState(() { _entriesByDate = map; loading = false; });
+      }
+    } catch (_) { setState(() => loading = false); }
+  }
+
+  int get _daysInMonth => DateTime(_currentMonth.year, _currentMonth.month + 1, 0).day;
+  int get _firstWeekday => DateTime(_currentMonth.year, _currentMonth.month, 1).weekday;
+
+  String _dateStr(DateTime d) => '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  bool _hasEntries(DateTime d) => _entriesByDate.containsKey(_dateStr(d));
+
+  double _totalCal(String date) => (_entriesByDate[date] ?? []).fold(0, (sum, e) => sum + (e['calories'] as num? ?? 0).toDouble());
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final dayLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+    final calDays = <DateTime?>[];
+    for (int i = 1; i < _firstWeekday; i++) calDays.add(null);
+    for (int d = 1; d <= _daysInMonth; d++) calDays.add(DateTime(_currentMonth.year, _currentMonth.month, d));
+
+    final selectedEntries = _selectedDate != null ? (_entriesByDate[_selectedDate] ?? []) : [];
+    final mealOrder = ['petit_dejeuner', 'dejeuner', 'diner', 'collation'];
+    final mealLabels = {'petit_dejeuner': '🌅 Petit déjeuner', 'dejeuner': '☀️ Déjeuner', 'diner': '🌙 Dîner', 'collation': '🍎 Collation'};
+
+    return Scaffold(
+      backgroundColor: kBg,
+      appBar: AppBar(
+        backgroundColor: kBg,
+        title: const Text('Historique nutrition', style: TextStyle(color: kText, fontSize: 18, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: kText),
+        elevation: 0,
+      ),
+      body: loading
+          ? const Center(child: CircularProgressIndicator(color: kGreen, strokeWidth: 2))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Calendrier
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(18), border: Border.all(color: kBorder)),
+                  child: Column(children: [
+                    // Navigation mois
+                    Row(children: [
+                      Clickable(
+                        onTap: () => setState(() { _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1); _selectedDate = null; }),
+                        child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.chevron_left_rounded, color: kTextDim, size: 20)),
+                      ),
+                      Expanded(child: Center(child: Text('${_monthNames[_currentMonth.month - 1]} ${_currentMonth.year}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: kText)))),
+                      Clickable(
+                        onTap: () {
+                          final next = DateTime(_currentMonth.year, _currentMonth.month + 1);
+                          if (next.isBefore(DateTime(now.year, now.month + 1))) setState(() { _currentMonth = next; _selectedDate = null; });
+                        },
+                        child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.chevron_right_rounded, color: kTextDim, size: 20)),
+                      ),
+                    ]),
+                    const SizedBox(height: 14),
+                    Row(children: dayLabels.map((d) => Expanded(child: Center(child: Text(d, style: const TextStyle(fontSize: 11, color: kTextDim, fontWeight: FontWeight.w600))))).toList()),
+                    const SizedBox(height: 8),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 4, crossAxisSpacing: 4, childAspectRatio: 1.8),
+                      itemCount: calDays.length,
+                      itemBuilder: (context, i) {
+                        final day = calDays[i];
+                        if (day == null) return const SizedBox();
+                        final dateStr = _dateStr(day);
+                        final hasData = _hasEntries(day);
+                        final isSelected = _selectedDate == dateStr;
+                        final isToday = day.year == now.year && day.month == now.month && day.day == now.day;
+                        final isFuture = day.isAfter(now);
+                        return Clickable(
+                          onTap: hasData ? () => setState(() => _selectedDate = isSelected ? null : dateStr) : () {},
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            decoration: BoxDecoration(
+                              color: isSelected ? kGreen : hasData ? kGreen.withOpacity(0.2) : isToday ? kCard2 : kCard2,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: isToday ? kGreen.withOpacity(0.5) : isSelected ? kGreen : Colors.transparent),
+                            ),
+                            child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              Text('${day.day}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isSelected ? Colors.white : isFuture ? kTextDim.withOpacity(0.3) : hasData ? kGreen : kText)),
+                              if (hasData) Container(width: 4, height: 4, decoration: BoxDecoration(color: isSelected ? Colors.white : kGreen, shape: BoxShape.circle)),
+                            ])),
+                          ),
+                        );
+                      },
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 20),
+
+                // Détail du jour sélectionné
+                if (_selectedDate != null) ...[
+                  Text('REPAS DU $_selectedDate', style: const TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                  const SizedBox(height: 8),
+                  // Total calories
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(color: kGreen.withOpacity(0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.2))),
+                    child: Row(children: [
+                      const Icon(Icons.local_fire_department_rounded, color: kGreen, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Total : ${_totalCal(_selectedDate!).toStringAsFixed(0)} kcal', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kGreen)),
+                      const Spacer(),
+                      Text('${selectedEntries.length} aliment${selectedEntries.length > 1 ? 's' : ''}', style: const TextStyle(fontSize: 12, color: kTextDim)),
+                    ]),
+                  ),
+                  // Par repas
+                  ...mealOrder.map((mealKey) {
+                    final items = selectedEntries.where((e) => e['meal_type'] == mealKey).toList();
+                    if (items.isEmpty) return const SizedBox();
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                          child: Text(mealLabels[mealKey] ?? mealKey, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+                        ),
+                        ...items.map((item) => Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
+                          child: Row(children: [
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(item['name'] as String? ?? '', style: const TextStyle(fontSize: 13, color: kText)),
+                              if (item['quantity'] != null && (item['quantity'] as String).isNotEmpty)
+                                Text(item['quantity'] as String, style: const TextStyle(fontSize: 11, color: kTextDim)),
+                            ])),
+                            if (item['calories'] != null && (item['calories'] as num) > 0)
+                              _chip('${(item['calories'] as num).toStringAsFixed(0)} kcal', kOrange),
+                            if (item['protein'] != null && (item['protein'] as num) > 0) ...[
+                              const SizedBox(width: 4),
+                              _chip('${(item['protein'] as num).toStringAsFixed(0)}g P', kGreen),
+                            ],
+                          ]),
+                        )).toList(),
+                      ]),
+                    );
+                  }).toList(),
+                ] else ...[
+                  Center(child: Text('Sélectionne un jour pour voir les repas', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.2)))),
+                ],
+              ]),
+            ),
+    );
+  }
+
+  Widget _chip(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+    child: Text(text, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
+  );
+}
+
 // ===================== BILAN SEMAINE PAGE =====================
 class BilanSemainePage extends StatefulWidget {
   final String deviceId;
@@ -4641,11 +4947,9 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
           Row(children: [
             _statBox('Séances', '$totalDone/7', kBlue),
             const SizedBox(width: 10),
-            _statBox('Streak', '$streak j 🔥', kYellow),
+            _statBox('Streak', '${calculateStreak(trainingSessions)} j 🔥', kYellow),
             const SizedBox(width: 10),
-            _statBox('Score IA', '$lastScore/100', kGreen),
-            const SizedBox(width: 10),
-            _statBox('Squat', '$squat kg', kOrange),
+            _statBox('Poids', widget.userData['weight'] != null ? '${widget.userData['weight']} kg' : '--', kGreen),
           ]),
           const SizedBox(height: 20),
 
@@ -4863,7 +5167,7 @@ class _TrainingCalendarPageState extends State<TrainingCalendarPage> {
                     GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 6, crossAxisSpacing: 6),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, mainAxisSpacing: 4, crossAxisSpacing: 4, childAspectRatio: 1.8),
                       itemCount: calDays.length,
                       itemBuilder: (context, i) {
                         final day = calDays[i];

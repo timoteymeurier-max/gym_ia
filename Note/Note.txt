@@ -1,1 +1,25 @@
-dans progres quand je clique sur ajouter une perf ca ne l'ajoute pas
+OK fixer action rapide analyse exo
+
+OK ameliorer coach ia
+
+OK travailler nutrition aujourd'hui
+
+OK mettre evolution poid tout en long et en dessous mettre -sem et streak supp score
+
+avoir le detail de chaque jour dans le calendrier
+
+retravailler bilan de la semaine
+
+ajouter des recettes dans nutrition
+
+ajouter des exo dans training
+
+ajouter des programmes predefinis dans training
+
+ajouter des exos dans mes exercices dans progres
+
+systeme de log par mail
+
+retravailler interface, remplacere emojis, faire des videos pour les exo et nutritions
+
+entrainer l'ia pour analyser different exo, pour analyser les plats

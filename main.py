@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, Header
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from groq import Groq
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, ForeignKey, Float
@@ -13,6 +13,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import json
+import hashlib
+import secrets
 
 load_dotenv()
 
@@ -65,7 +67,6 @@ class UserData(Base):
     value = Column(Text)
     updated_at = Column(DateTime, default=datetime.now)
 
-
 class AIProgram(Base):
     __tablename__ = "ai_programs"
     id = Column(Integer, primary_key=True)
@@ -83,7 +84,6 @@ class AINutritionPlan(Base):
     objective = Column(String)
     content = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
-
 
 class ExercisePerf(Base):
     __tablename__ = "exercise_perfs"
@@ -107,7 +107,7 @@ class FoodEntry(Base):
     carbs = Column(Float, nullable=True)
     fat = Column(Float, nullable=True)
     quantity = Column(String, nullable=True)
-    meal_type = Column(String, nullable=True)  # petit_dejeuner, dejeuner, diner, collation
+    meal_type = Column(String, nullable=True)
     date = Column(String)
     created_at = Column(DateTime, default=datetime.now)
 
@@ -118,12 +118,24 @@ class TrainingSession(Base):
     date = Column(String, unique=False)
     created_at = Column(DateTime, default=datetime.now)
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True)
+    email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+
+class UserToken(Base):
+    __tablename__ = "user_tokens"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False)
+    token = Column(String, unique=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
 
 Base.metadata.create_all(engine)
-
 DBSession = sessionmaker(bind=engine)
 
-# Migration : ajout colonne device_id si elle n'existe pas
+# Migration
 from sqlalchemy import text, inspect
 inspector = inspect(engine)
 cols_user_data = [c['name'] for c in inspector.get_columns('user_data')]
@@ -135,12 +147,38 @@ with engine.connect() as conn:
     if 'device_id' not in cols_conversations:
         conn.execute(text("ALTER TABLE conversations ADD COLUMN device_id VARCHAR DEFAULT 'default'"))
         conn.commit()
-    # Supprimer l'ancienne contrainte unique sur key seul
     try:
         conn.execute(text("ALTER TABLE user_data DROP CONSTRAINT IF EXISTS user_data_key_key"))
         conn.commit()
     except:
         pass
+
+# ===================== AUTH HELPERS =====================
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def generate_token() -> str:
+    return secrets.token_hex(32)
+
+def get_user_from_token(token: str, db):
+    user_token = db.query(UserToken).filter(UserToken.token == token).first()
+    if not user_token:
+        return None
+    return db.query(User).filter(User.id == user_token.user_id).first()
+
+def get_device_id(authorization: str = "", x_device_id: str = "default") -> str:
+    """Convertit un token Bearer en device_id unique par utilisateur."""
+    if authorization.startswith("Bearer "):
+        token = authorization.replace("Bearer ", "").strip()
+        db = DBSession()
+        user = get_user_from_token(token, db)
+        db.close()
+        if user:
+            return f"user_{user.id}"
+    return x_device_id
+
+# ===================== DATA HELPERS =====================
 
 def get_user_data(db, device_id="default"):
     rows = db.query(UserData).filter(UserData.device_id == device_id).all()
@@ -162,13 +200,12 @@ def set_user_data(db, device_id, key, value):
 
 def add_weight_history(db, device_id, weight, date):
     row = db.query(UserData).filter(UserData.device_id == device_id, UserData.key == "weight_history").first()
+    history = []
     if row:
         try:
             history = json.loads(row.value)
         except:
             history = []
-    else:
-        history = []
     history.append({"date": date, "weight": float(weight)})
     history = history[-30:]
     set_user_data(db, device_id, "weight_history", json.dumps(history))
@@ -215,7 +252,6 @@ Réponse à analyser:
                 content=json.dumps({"raw": ai_response}),
             ))
             db.commit()
-            print(f"Programme entraînement sauvegardé: {data.get('title')}")
 
         if data.get("is_nutrition_plan"):
             db.add(AINutritionPlan(
@@ -225,7 +261,6 @@ Réponse à analyser:
                 content=json.dumps({"raw": ai_response}),
             ))
             db.commit()
-            print(f"Plan nutrition sauvegardé: {data.get('title')}")
 
     except Exception as e:
         import traceback
@@ -440,14 +475,61 @@ Réponds toujours en français."""
     )
     return response.choices[0].message.content
 
+# ===================== AUTH ENDPOINTS =====================
+
+@app.post("/auth/register")
+async def register(email: str = Form(...), password: str = Form(...)):
+    db = DBSession()
+    existing = db.query(User).filter(User.email == email.lower().strip()).first()
+    if existing:
+        db.close()
+        raise HTTPException(status_code=400, detail="Email déjà utilisé")
+    user = User(email=email.lower().strip(), password_hash=hash_password(password))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    token = generate_token()
+    db.add(UserToken(user_id=user.id, token=token))
+    db.commit()
+    email_result = user.email
+    db.close()
+    return {"token": token, "email": email_result}
+
+@app.post("/auth/login")
+async def login(email: str = Form(...), password: str = Form(...)):
+    db = DBSession()
+    user = db.query(User).filter(User.email == email.lower().strip()).first()
+    if not user or user.password_hash != hash_password(password):
+        db.close()
+        raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
+    token = generate_token()
+    db.add(UserToken(user_id=user.id, token=token))
+    db.commit()
+    email_result = user.email
+    db.close()
+    return {"token": token, "email": email_result}
+
+@app.post("/auth/logout")
+async def logout(authorization: str = Header(default="")):
+    token = authorization.replace("Bearer ", "").strip()
+    db = DBSession()
+    db.query(UserToken).filter(UserToken.token == token).delete()
+    db.commit()
+    db.close()
+    return {"message": "Déconnecté"}
+
+# ===================== CONVERSATIONS =====================
+
 @app.post("/conversations/")
 async def create_conversation(
     objectif: str = Form(default="general"),
     title: str = Form(default="Nouvelle conversation"),
+    authorization: str = Header(default=""),
     x_device_id: str = Header(default="default")
 ):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    conv = Conversation(title=title, objectif=objectif, device_id=x_device_id)
+    conv = Conversation(title=title, objectif=objectif, device_id=device_id)
     db.add(conv)
     db.commit()
     db.refresh(conv)
@@ -456,17 +538,19 @@ async def create_conversation(
     return result
 
 @app.get("/conversations/")
-async def get_conversations(x_device_id: str = Header(default="default")):
+async def get_conversations(authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    convs = db.query(Conversation).filter(Conversation.device_id == x_device_id).order_by(Conversation.updated_at.desc()).all()
+    convs = db.query(Conversation).filter(Conversation.device_id == device_id).order_by(Conversation.updated_at.desc()).all()
     result = [{"id": c.id, "title": c.title, "objectif": c.objectif, "updated_at": c.updated_at.strftime("%d/%m/%Y %H:%M")} for c in convs]
     db.close()
     return result
 
 @app.delete("/conversations/{conv_id}")
-async def delete_conversation(conv_id: int, x_device_id: str = Header(default="default")):
+async def delete_conversation(conv_id: int, authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    conv = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.device_id == x_device_id).first()
+    conv = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.device_id == device_id).first()
     if conv:
         db.delete(conv)
         db.commit()
@@ -474,7 +558,8 @@ async def delete_conversation(conv_id: int, x_device_id: str = Header(default="d
     return {"message": "deleted"}
 
 @app.get("/conversations/{conv_id}/messages")
-async def get_messages(conv_id: int, x_device_id: str = Header(default="default")):
+async def get_messages(conv_id: int, authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
     messages = db.query(Message).filter(Message.conversation_id == conv_id).order_by(Message.created_at).all()
     result = [{"role": m.role, "content": m.content, "video_filename": m.video_filename} for m in messages]
@@ -487,10 +572,12 @@ async def chat(
     message: str = Form(default=""),
     file: Optional[UploadFile] = File(default=None),
     user_profile: str = Form(default=""),
+    authorization: str = Header(default=""),
     x_device_id: str = Header(default="default")
 ):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    conv = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.device_id == x_device_id).first()
+    conv = db.query(Conversation).filter(Conversation.id == conv_id, Conversation.device_id == device_id).first()
     if not conv:
         db.close()
         return {"error": "Conversation introuvable"}
@@ -513,7 +600,7 @@ async def chat(
         except:
             pass
 
-    saved_data = get_user_data(db, x_device_id)
+    saved_data = get_user_data(db, device_id)
     for k, v in saved_data.items():
         if k not in profile_dict or not profile_dict[k]:
             profile_dict[k] = v
@@ -526,27 +613,20 @@ async def chat(
     full_response = ai_response
     if video_data:
         full_response = build_video_table(video_data) + ai_response
-        set_user_data(db, x_device_id, "last_squat_score", str(video_data.get('score', '')))
-        set_user_data(db, x_device_id, "last_squat_reps", str(video_data.get('reps', '')))
-        set_user_data(db, x_device_id, "last_squat_date", datetime.now().strftime("%d/%m/%Y"))
+        set_user_data(db, device_id, "last_squat_score", str(video_data.get('score', '')))
+        set_user_data(db, device_id, "last_squat_reps", str(video_data.get('reps', '')))
+        set_user_data(db, device_id, "last_squat_date", datetime.now().strftime("%d/%m/%Y"))
 
     extracted = extract_user_data_from_message(user_text, ai_response)
     for k, v in extracted.items():
         if v and str(v).strip() and str(v) != "None":
-            set_user_data(db, x_device_id, k, str(v))
+            set_user_data(db, device_id, k, str(v))
 
-    # Détecter les perfs mentionnées dans le chat
     perf_prompt = f"""Analyse ce message d'un sportif.
 Extrait UNIQUEMENT les performances mentionnées avec un exercice ET une charge ou des répétitions.
-
 Message: {user_text}
-
 Retourne UNIQUEMENT un JSON valide comme ceci :
-[
-  {{"exercise": "Squat", "weight": 100, "reps": 5, "sets": 4}},
-  {{"exercise": "Développé couché", "weight": 80, "reps": 8, "sets": 3}}
-]
-
+[{{"exercise": "Squat", "weight": 100, "reps": 5, "sets": 4}}]
 Si aucune perf mentionnée retourne [].
 Ne retourne QUE le JSON."""
     try:
@@ -555,13 +635,12 @@ Ne retourne QUE le JSON."""
             messages=[{"role": "user", "content": perf_prompt}],
             max_tokens=300,
         )
-        perf_text = perf_resp.choices[0].message.content.strip()
-        perf_text = perf_text.replace("```json", "").replace("```", "").strip()
+        perf_text = perf_resp.choices[0].message.content.strip().replace("```json", "").replace("```", "").strip()
         perfs = json.loads(perf_text)
         for p in perfs:
             if p.get("exercise") and (p.get("weight") or p.get("reps")):
                 db.add(ExercisePerf(
-                    device_id=x_device_id,
+                    device_id=device_id,
                     exercise=p["exercise"],
                     weight=p.get("weight"),
                     reps=p.get("reps"),
@@ -569,7 +648,6 @@ Ne retourne QUE le JSON."""
                     date=datetime.now().strftime("%d/%m/%Y"),
                 ))
                 db.commit()
-                print(f"Perf sauvegardée: {p['exercise']} {p.get('weight')}kg")
     except Exception as e:
         print(f"Erreur détection perfs: {e}")
 
@@ -581,85 +659,89 @@ Ne retourne QUE le JSON."""
     if len(history) == 0:
         conv.title = user_text[:40] + ("..." if len(user_text) > 40 else "")
 
-    detect_and_save_program(db, x_device_id, user_text, ai_response)
+    detect_and_save_program(db, device_id, user_text, ai_response)
     conv.updated_at = datetime.now()
     db.commit()
     db.close()
 
     return {"response": full_response, "video_data": video_data, "video_filename": video_filename, "updated_user_data": extracted}
 
-
-@app.get("/migrate/")
-async def migrate():
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        conn.execute(text("ALTER TABLE user_data ADD COLUMN IF NOT EXISTS device_id VARCHAR DEFAULT 'default'"))
-        conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS device_id VARCHAR DEFAULT 'default'"))
-        conn.commit()
-    return {"message": "Migration OK"}
-
+# ===================== USER DATA =====================
 
 @app.get("/user-data/")
-async def get_all_user_data(x_device_id: str = Header(default="default")):
+async def get_all_user_data(authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    data = get_user_data(db, x_device_id)
+    data = get_user_data(db, device_id)
     db.close()
     return data
 
 @app.put("/user-data/")
-async def update_user_data(data: str = Form(...), x_device_id: str = Header(default="default")):
+async def update_user_data(data: str = Form(...), authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
     try:
         parsed = json.loads(data)
         for k, v in parsed.items():
-            set_user_data(db, x_device_id, k, str(v))
+            set_user_data(db, device_id, k, str(v))
         if 'weight' in parsed and parsed['weight']:
-            add_weight_history(db, x_device_id, parsed['weight'], datetime.now().strftime("%d/%m"))
+            add_weight_history(db, device_id, parsed['weight'], datetime.now().strftime("%d/%m"))
     except Exception as e:
         print(f"Erreur update_user_data: {e}")
     db.close()
     return {"message": "updated"}
 
+# ===================== AI PROGRAMS =====================
+
 @app.get("/ai-programs/")
-async def get_ai_programs(x_device_id: str = Header(default="default")):
+async def get_ai_programs(authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    programs = db.query(AIProgram).filter(AIProgram.device_id == x_device_id).order_by(AIProgram.created_at.desc()).all()
+    programs = db.query(AIProgram).filter(AIProgram.device_id == device_id).order_by(AIProgram.created_at.desc()).all()
     result = [{"id": p.id, "title": p.title, "objective": p.objective, "content": p.content, "created_at": p.created_at.strftime("%d/%m/%Y")} for p in programs]
     db.close()
     return result
 
 @app.delete("/ai-programs/{program_id}")
-async def delete_ai_program(program_id: int, x_device_id: str = Header(default="default")):
+async def delete_ai_program(program_id: int, authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    program = db.query(AIProgram).filter(AIProgram.id == program_id, AIProgram.device_id == x_device_id).first()
+    program = db.query(AIProgram).filter(AIProgram.id == program_id, AIProgram.device_id == device_id).first()
     if program:
         db.delete(program)
         db.commit()
     db.close()
     return {"message": "deleted"}
 
+# ===================== AI NUTRITION PLANS =====================
+
 @app.get("/ai-nutrition-plans/")
-async def get_ai_nutrition_plans(x_device_id: str = Header(default="default")):
+async def get_ai_nutrition_plans(authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    plans = db.query(AINutritionPlan).filter(AINutritionPlan.device_id == x_device_id).order_by(AINutritionPlan.created_at.desc()).all()
+    plans = db.query(AINutritionPlan).filter(AINutritionPlan.device_id == device_id).order_by(AINutritionPlan.created_at.desc()).all()
     result = [{"id": p.id, "title": p.title, "objective": p.objective, "content": p.content, "created_at": p.created_at.strftime("%d/%m/%Y")} for p in plans]
     db.close()
     return result
 
 @app.delete("/ai-nutrition-plans/{plan_id}")
-async def delete_ai_nutrition_plan(plan_id: int, x_device_id: str = Header(default="default")):
+async def delete_ai_nutrition_plan(plan_id: int, authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    plan = db.query(AINutritionPlan).filter(AINutritionPlan.id == plan_id, AINutritionPlan.device_id == x_device_id).first()
+    plan = db.query(AINutritionPlan).filter(AINutritionPlan.id == plan_id, AINutritionPlan.device_id == device_id).first()
     if plan:
         db.delete(plan)
         db.commit()
     db.close()
     return {"message": "deleted"}
 
+# ===================== EXERCISE PERFS =====================
+
 @app.get("/exercise-perfs/")
-async def get_exercise_perfs(exercise: str = "", x_device_id: str = Header(default="default")):
+async def get_exercise_perfs(exercise: str = "", authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    query = db.query(ExercisePerf).filter(ExercisePerf.device_id == x_device_id)
+    query = db.query(ExercisePerf).filter(ExercisePerf.device_id == device_id)
     if exercise:
         query = query.filter(ExercisePerf.exercise == exercise)
     perfs = query.order_by(ExercisePerf.date.desc()).all()
@@ -675,11 +757,13 @@ async def add_exercise_perf(
     sets: int = Form(default=0),
     notes: str = Form(default=""),
     date: str = Form(default=""),
+    authorization: str = Header(default=""),
     x_device_id: str = Header(default="default")
 ):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
     perf = ExercisePerf(
-        device_id=x_device_id,
+        device_id=device_id,
         exercise=exercise,
         weight=weight if weight > 0 else None,
         reps=reps if reps > 0 else None,
@@ -695,20 +779,23 @@ async def add_exercise_perf(
     return result
 
 @app.delete("/exercise-perfs/{perf_id}")
-async def delete_exercise_perf(perf_id: int, x_device_id: str = Header(default="default")):
+async def delete_exercise_perf(perf_id: int, authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    perf = db.query(ExercisePerf).filter(ExercisePerf.id == perf_id, ExercisePerf.device_id == x_device_id).first()
+    perf = db.query(ExercisePerf).filter(ExercisePerf.id == perf_id, ExercisePerf.device_id == device_id).first()
     if perf:
         db.delete(perf)
         db.commit()
     db.close()
     return {"message": "deleted"}
 
+# ===================== FOOD ENTRIES =====================
 
 @app.get("/food-entries/")
-async def get_food_entries(date: str = "", x_device_id: str = Header(default="default")):
+async def get_food_entries(date: str = "", authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    query = db.query(FoodEntry).filter(FoodEntry.device_id == x_device_id)
+    query = db.query(FoodEntry).filter(FoodEntry.device_id == device_id)
     if date:
         query = query.filter(FoodEntry.date == date)
     entries = query.order_by(FoodEntry.created_at.desc()).all()
@@ -726,11 +813,13 @@ async def add_food_entry(
     quantity: str = Form(default=""),
     meal_type: str = Form(default="dejeuner"),
     date: str = Form(default=""),
+    authorization: str = Header(default=""),
     x_device_id: str = Header(default="default")
 ):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
     entry = FoodEntry(
-        device_id=x_device_id,
+        device_id=device_id,
         name=name,
         calories=calories if calories > 0 else None,
         protein=protein if protein > 0 else None,
@@ -748,9 +837,10 @@ async def add_food_entry(
     return result
 
 @app.delete("/food-entries/{entry_id}")
-async def delete_food_entry(entry_id: int, x_device_id: str = Header(default="default")):
+async def delete_food_entry(entry_id: int, authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    entry = db.query(FoodEntry).filter(FoodEntry.id == entry_id, FoodEntry.device_id == x_device_id).first()
+    entry = db.query(FoodEntry).filter(FoodEntry.id == entry_id, FoodEntry.device_id == device_id).first()
     if entry:
         db.delete(entry)
         db.commit()
@@ -760,16 +850,15 @@ async def delete_food_entry(entry_id: int, x_device_id: str = Header(default="de
 @app.post("/analyze-food-photo/")
 async def analyze_food_photo(
     file: UploadFile = File(...),
+    authorization: str = Header(default=""),
     x_device_id: str = Header(default="default")
 ):
     try:
         import base64
         contents = await file.read()
-        b64 = base64.b64encode(contents).decode()
-        
-        prompt = f"""Analyse cette photo de plat et estime les valeurs nutritionnelles.
+        prompt = """Analyse cette photo de plat et estime les valeurs nutritionnelles.
 Réponds UNIQUEMENT avec ce JSON :
-{{
+{
   "name": "Nom du plat",
   "calories": 500,
   "protein": 30,
@@ -777,26 +866,26 @@ Réponds UNIQUEMENT avec ce JSON :
   "fat": 15,
   "quantity": "1 portion estimée",
   "ingredients": ["ingrédient 1", "ingrédient 2"]
-}}
+}
 Donne des estimations réalistes."""
-
         response = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=300,
         )
-        text = response.choices[0].message.content.strip()
-        text = text.replace("```json", "").replace("```", "").strip()
-        data = json.loads(text)
-        return data
+        text = response.choices[0].message.content.strip().replace("```json", "").replace("```", "").strip()
+        return json.loads(text)
     except Exception as e:
         print(f"Erreur analyse photo: {e}")
         return {"name": "Plat analysé", "calories": 400, "protein": 25, "carbs": 40, "fat": 12, "quantity": "1 portion", "ingredients": []}
-    
+
+# ===================== TRAINING SESSIONS =====================
+
 @app.get("/training-sessions/")
-async def get_training_sessions(x_device_id: str = Header(default="default")):
+async def get_training_sessions(authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    sessions = db.query(TrainingSession).filter(TrainingSession.device_id == x_device_id).all()
+    sessions = db.query(TrainingSession).filter(TrainingSession.device_id == device_id).all()
     result = [{"id": s.id, "date": s.date} for s in sessions]
     db.close()
     return result
@@ -804,15 +893,16 @@ async def get_training_sessions(x_device_id: str = Header(default="default")):
 @app.post("/training-sessions/")
 async def add_training_session(
     date: str = Form(...),
+    authorization: str = Header(default=""),
     x_device_id: str = Header(default="default")
 ):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    # Vérifier si déjà coché ce jour
-    existing = db.query(TrainingSession).filter(TrainingSession.device_id == x_device_id, TrainingSession.date == date).first()
+    existing = db.query(TrainingSession).filter(TrainingSession.device_id == device_id, TrainingSession.date == date).first()
     if existing:
         db.close()
         return {"id": existing.id, "date": existing.date}
-    session = TrainingSession(device_id=x_device_id, date=date)
+    session = TrainingSession(device_id=device_id, date=date)
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -820,11 +910,13 @@ async def add_training_session(
     db.close()
     return result
 
+# ===================== DAILY MESSAGE =====================
 
 @app.get("/daily-message/")
-async def get_daily_message(x_device_id: str = Header(default="default")):
+async def get_daily_message(authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
     db = DBSession()
-    user_data = get_user_data(db, x_device_id)
+    user_data = get_user_data(db, device_id)
     db.close()
 
     name = user_data.get('name', '')
@@ -834,12 +926,10 @@ async def get_daily_message(x_device_id: str = Header(default="default")):
     goal = user_data.get('goal', '')
     last_score = user_data.get('last_squat_score', '')
     level = user_data.get('level', '')
-
     has_profile = any([name, weight, squat, goal])
 
     if has_profile:
         prompt = f"""Tu es un coach sportif IA moderne style TikTok fitness. Génère UNE phrase d'accroche percutante pour cet athlète.
-
 Profil :
 - Prénom : {name or 'Non renseigné'}
 - Poids : {weight or 'Non renseigné'} kg
@@ -848,7 +938,6 @@ Profil :
 - Objectif : {goal or 'Non renseigné'}
 - Niveau : {level or 'Non renseigné'}
 - Dernier score : {last_score or 'Non renseigné'}/100
-
 Varie le style : question directe, défi, référence aux stats, motivation raw, humour sportif.
 Règles : max 15 mots, utilise le prénom si disponible, tutoie, 1 emoji max, pas de guillemets, juste la phrase."""
     else:
@@ -862,8 +951,16 @@ Règles : max 15 mots, tutoie, 1 emoji max, pas de guillemets, juste la phrase."
             messages=[{"role": "user", "content": prompt}],
             max_tokens=50,
         )
-        message = response.choices[0].message.content.strip()
-        return {"message": message}
+        return {"message": response.choices[0].message.content.strip()}
     except Exception as e:
         print(f"Erreur Groq daily-message: {e}")
-        return {"message": "Erreur serveur"}
+        return {"message": "Prêt à tout donner aujourd'hui ?"}
+
+@app.get("/migrate/")
+async def migrate():
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE user_data ADD COLUMN IF NOT EXISTS device_id VARCHAR DEFAULT 'default'"))
+        conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS device_id VARCHAR DEFAULT 'default'"))
+        conn.commit()
+    return {"message": "Migration OK"}
