@@ -123,13 +123,257 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
     theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: kBg, useMaterial3: true),
-    home: const RootPage(),
+    home: const SplashPage(),
   );
 }
 
+
+// ===================== AUTH PAGE =====================
+class AuthPage extends StatefulWidget {
+  final Function(String token, String email) onLogin;
+  const AuthPage({super.key, required this.onLogin});
+  @override
+  State<AuthPage> createState() => _AuthPageState();
+}
+
+class _AuthPageState extends State<AuthPage> with SingleTickerProviderStateMixin {
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  bool _isLogin = true;
+  bool _loading = false;
+  bool _obscure = true;
+  String? _error;
+  late AnimationController _animCtrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
+    _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final email = _emailCtrl.text.trim();
+    final password = _passwordCtrl.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = 'Remplis tous les champs');
+      return;
+    }
+    if (!email.contains('@')) {
+      setState(() => _error = 'Email invalide');
+      return;
+    }
+    if (password.length < 6) {
+      setState(() => _error = 'Mot de passe trop court (6 caractères minimum)');
+      return;
+    }
+    setState(() { _loading = true; _error = null; });
+    try {
+      final endpoint = _isLogin ? 'login' : 'register';
+      final req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/auth/$endpoint'));
+      req.fields['email'] = email;
+      req.fields['password'] = password;
+      final res = await req.send();
+      final body = await res.stream.bytesToString();
+      final data = jsonDecode(body);
+      if (res.statusCode == 200) {
+        final token = data['token'] as String;
+        final userEmail = data['email'] as String;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_token', token);
+        await prefs.setString('auth_email', userEmail);
+        widget.onLogin(token, userEmail);
+      } else {
+        setState(() { _error = data['detail'] ?? 'Erreur inconnue'; _loading = false; });
+      }
+    } catch (e) {
+      setState(() { _error = 'Erreur de connexion au serveur'; _loading = false; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _anim,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(28, 60, 28, 40),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Logo
+              Container(
+                width: 56, height: 56,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [kOrange, Color(0xFFFF9A6C)]),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: kOrange.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+                ),
+                child: const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 28),
+              ),
+              const SizedBox(height: 32),
+              Text(_isLogin ? 'Bon retour 👋' : 'Créer un compte', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, letterSpacing: -0.5)),
+              const SizedBox(height: 6),
+              Text(_isLogin ? 'Connecte-toi pour accéder à ton coach' : 'Commence ton parcours sportif IA', style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.4))),
+              const SizedBox(height: 40),
+
+              // Email
+              _label('EMAIL'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                style: const TextStyle(color: kText, fontSize: 15),
+                decoration: _inputDeco('ton@email.com', Icons.email_outlined),
+              ),
+              const SizedBox(height: 20),
+
+              // Password
+              _label('MOT DE PASSE'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _passwordCtrl,
+                obscureText: _obscure,
+                style: const TextStyle(color: kText, fontSize: 15),
+                onSubmitted: (_) => _submit(),
+                decoration: _inputDeco('••••••••', Icons.lock_outline_rounded).copyWith(
+                  suffixIcon: Clickable(
+                    onTap: () => setState(() => _obscure = !_obscure),
+                    child: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: kTextDim, size: 20),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Error
+              if (_error != null) Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: kRed.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: kRed.withOpacity(0.3))),
+                child: Row(children: [
+                  const Icon(Icons.error_outline_rounded, color: kRed, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(_error!, style: const TextStyle(fontSize: 13, color: kRed))),
+                ]),
+              ),
+              const SizedBox(height: 24),
+
+              // Bouton submit
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  child: _loading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text(_isLogin ? 'Se connecter' : 'Créer mon compte', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Switch login/register
+              Center(child: Clickable(
+                onTap: () => setState(() { _isLogin = !_isLogin; _error = null; }),
+                child: RichText(text: TextSpan(
+                  style: const TextStyle(fontSize: 14),
+                  children: [
+                    TextSpan(text: _isLogin ? 'Pas encore de compte ? ' : 'Déjà un compte ? ', style: TextStyle(color: Colors.white.withOpacity(0.4))),
+                    TextSpan(text: _isLogin ? 'S\'inscrire' : 'Se connecter', style: const TextStyle(color: kOrange, fontWeight: FontWeight.w600)),
+                  ],
+                )),
+              )),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String text) => Text(text, style: const TextStyle(fontSize: 11, color: Color(0xFF666666), fontWeight: FontWeight.w600, letterSpacing: 1.2));
+
+  InputDecoration _inputDeco(String hint, IconData icon) => InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 15),
+    prefixIcon: Icon(icon, color: kTextDim, size: 20),
+    filled: true,
+    fillColor: kCard,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kBorder)),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+  );
+}
+
+// ===================== SPLASH PAGE =====================
+class SplashPage extends StatefulWidget {
+  const SplashPage({super.key});
+  @override
+  State<SplashPage> createState() => _SplashPageState();
+}
+
+class _SplashPageState extends State<SplashPage> {
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    if (!mounted) return;
+    if (token != null && token.isNotEmpty) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => RootPage(token: token)));
+    } else {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => AuthPage(
+        onLogin: (token, email) => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => RootPage(token: token))),
+      )));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 64, height: 64,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(colors: [kOrange, Color(0xFFFF9A6C)]),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [BoxShadow(color: kOrange.withOpacity(0.4), blurRadius: 24)],
+          ),
+          child: const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 32),
+        ),
+        const SizedBox(height: 20),
+        const CircularProgressIndicator(color: kOrange, strokeWidth: 2),
+      ])),
+    );
+  }
+}
+
+
+
 // ===================== ROOT PAGE =====================
 class RootPage extends StatefulWidget {
-  const RootPage({super.key});
+  final String token;
+  const RootPage({super.key, required this.token});
   @override
   State<RootPage> createState() => _RootPageState();
 }
@@ -138,6 +382,7 @@ class _RootPageState extends State<RootPage> {
   int _currentIndex = 0;
   Map<String, String> userData = {};
   String deviceId = '';
+  String authToken = '';
   String dailyMessage = '';
   String? _pendingCoachMessage;
   List<String> trainingSessions = []; // dates cochées ex: ["16/05/2025"]
@@ -149,7 +394,8 @@ class _RootPageState extends State<RootPage> {
   }
 
   Future<void> _init() async {
-    final id = await getDeviceId();
+    authToken = widget.token;
+    final id = 'user_token';
     if (!mounted) return;
     setState(() => deviceId = id);
     await loadUserData();
@@ -157,10 +403,12 @@ class _RootPageState extends State<RootPage> {
     await _loadTrainingSessions();
   }
 
+  Map<String, String> get _authHeaders => {'Authorization': 'Bearer $authToken'};
+
   Future<void> loadUserData() async {
-    if (deviceId.isEmpty) return;
+    if (authToken.isEmpty) return;
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/user-data/'), headers: {'x-device-id': deviceId}).timeout(const Duration(seconds: 60));
+      final response = await http.get(Uri.parse('$kBaseUrl/user-data/'), headers: _authHeaders).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         setState(() => userData = data.map((k, v) => MapEntry(k, v.toString())));
@@ -174,7 +422,7 @@ class _RootPageState extends State<RootPage> {
     if (deviceId.isEmpty) return;
     try {
       final ts = DateTime.now().millisecondsSinceEpoch;
-      final response = await http.get(Uri.parse('$kBaseUrl/daily-message/?t=$ts'), headers: {'x-device-id': deviceId}).timeout(const Duration(seconds: 60));
+      final response = await http.get(Uri.parse('$kBaseUrl/daily-message/?t=$ts'), headers: _authHeaders).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200 && mounted) {
         final data = jsonDecode(response.body);
         final msg = data['message']?.toString() ?? '';
@@ -191,7 +439,7 @@ class _RootPageState extends State<RootPage> {
   Future<void> _loadTrainingSessions() async {
     if (deviceId.isEmpty) return;
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: {'x-device-id': deviceId});
+      final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: _authHeaders);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
         setState(() => trainingSessions = data.map((e) => e['date'] as String).toList());
@@ -220,7 +468,7 @@ class _RootPageState extends State<RootPage> {
       HomePageV2(
         userData: userData,
         onUserDataChanged: refreshUserData,
-        deviceId: deviceId,
+        deviceId: authToken,
         dailyMessage: dailyMessage,
         trainingSessions: trainingSessions,
         onToggleSession: _toggleTrainingSession,
@@ -231,10 +479,10 @@ class _RootPageState extends State<RootPage> {
           });
         },
       ),
-      CoachPageV2(deviceId: deviceId, onMessageSent: refreshUserData, pendingMessage: _pendingCoachMessage, onMessageConsumed: () => setState(() => _pendingCoachMessage = null)),
-      TrainingPageV2(userData: userData, deviceId: deviceId),
-      NutritionPageV2(userData: userData, deviceId: deviceId),
-      ProgressPageV2(userData: userData, deviceId: deviceId, trainingSessions: trainingSessions, onToggleSession: _toggleTrainingSession),
+      CoachPageV2(deviceId: authToken, onMessageSent: refreshUserData, pendingMessage: _pendingCoachMessage, onMessageConsumed: () => setState(() => _pendingCoachMessage = null)),
+      TrainingPageV2(userData: userData, deviceId: authToken),
+      NutritionPageV2(userData: userData, deviceId: authToken),
+      ProgressPageV2(userData: userData, deviceId: authToken, trainingSessions: trainingSessions, onToggleSession: _toggleTrainingSession),
     ];
     return Scaffold(
       backgroundColor: kBg,
@@ -5393,6 +5641,32 @@ class _ProfilePageV2State extends State<ProfilePageV2> {
             style: ElevatedButton.styleFrom(backgroundColor: saved ? kGreen : kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
             child: Text(saved ? '✓ Sauvegardé !' : 'Sauvegarder', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
           ),
+        ),
+        const SizedBox(height: 12),        
+        SizedBox(          
+          width: double.infinity,          
+          child: ElevatedButton.icon(            
+            onPressed: () async {              
+              final prefs = await SharedPreferences.getInstance();              
+              final token = prefs.getString('auth_token') ?? '';              
+              if (token.isNotEmpty) {                
+                await http.post(Uri.parse('$kBaseUrl/auth/logout'), headers: {'Authorization': 'Bearer $token'});              
+              }              
+              await prefs.remove('auth_token');              
+              await prefs.remove('auth_email');              
+              if (mounted) {                
+                Navigator.of(context).pushAndRemoveUntil(                  
+                  MaterialPageRoute(builder: (_) => AuthPage(                    
+                    onLogin: (token, email) => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => RootPage(token: token))),                  
+                  )),                  
+                  (route) => false,                
+                );              
+              }            
+            },            
+            icon: const Icon(Icons.logout_rounded, size: 16),            
+            label: const Text('Se déconnecter', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),            
+            style: ElevatedButton.styleFrom(backgroundColor: kCard2, foregroundColor: kRed, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: kRed, width: 0.5)), elevation: 0),          
+          ),        
         ),
       ]),
     );
