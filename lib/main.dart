@@ -192,12 +192,16 @@ class _AuthPageState extends State<AuthPage> with SingleTickerProviderStateMixin
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('auth_token', token);
         await prefs.setString('auth_email', userEmail);
-        widget.onLogin(token, userEmail);
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => RootPage(token: token)),
+          (route) => false,
+        );
       } else {
         setState(() { _error = data['detail'] ?? 'Erreur inconnue'; _loading = false; });
       }
     } catch (e) {
-      setState(() { _error = 'Erreur de connexion au serveur'; _loading = false; });
+      setState(() { _error = 'Erreur : $e'; _loading = false; });
     }
   }
 
@@ -335,15 +339,27 @@ class _SplashPageState extends State<SplashPage> {
 
   Future<void> _checkAuth() async {
     await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
     if (!mounted) return;
     if (token != null && token.isNotEmpty) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => RootPage(token: token)));
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => RootPage(token: token)),
+        (route) => false,
+      );
     } else {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => AuthPage(
-        onLogin: (token, email) => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => RootPage(token: token))),
-      )));
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => AuthPage(
+          onLogin: (token, email) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => RootPage(token: token)),
+              (route) => false,
+            );
+          },
+        )),
+        (route) => false,
+      );
     }
   }
 
@@ -367,7 +383,6 @@ class _SplashPageState extends State<SplashPage> {
     );
   }
 }
-
 
 
 // ===================== ROOT PAGE =====================
@@ -437,7 +452,7 @@ class _RootPageState extends State<RootPage> {
 
 
   Future<void> _loadTrainingSessions() async {
-    if (deviceId.isEmpty) return;
+    if (authToken.isEmpty) return;
     try {
       final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: _authHeaders);
       if (response.statusCode == 200) {
@@ -451,7 +466,7 @@ class _RootPageState extends State<RootPage> {
     if (trainingSessions.contains(date)) return; // Déjà coché, pas de décocher
     try {
       final req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/training-sessions/'));
-      req.headers['x-device-id'] = deviceId;
+      req.headers['Authorization'] = 'Bearer $authToken';
       req.fields['date'] = date;
       await req.send();
       await _loadTrainingSessions();
@@ -1286,7 +1301,7 @@ class _CoachPageV2State extends State<CoachPageV2> {
   String? _pendingSuggestion;
   bool _showWelcome = true;
 
-  Map<String, String> get _headers => {'x-device-id': widget.deviceId};
+  Map<String, String> get _headers => {'Authorization': 'Bearer ${widget.deviceId}'};
 
   @override
   void initState() {
@@ -1542,7 +1557,7 @@ class _ChatViewV2State extends State<ChatViewV2> {
   Uint8List? pendingVideoBytes;
   String? pendingVideoName;
 
-  Map<String, String> get _headers => {'x-device-id': widget.deviceId};
+  Map<String, String> get _headers => {'Authorization': 'Bearer ${widget.deviceId}'};
 
   @override
   void initState() {
@@ -2215,7 +2230,7 @@ class _AIProgramsPageState extends State<AIProgramsPage> {
     try {
       final response = await http.get(
         Uri.parse('$kBaseUrl/ai-programs/'),
-        headers: {'x-device-id': widget.deviceId},
+        headers: {'Authorization': 'Bearer ${widget.deviceId}'},
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
@@ -2227,7 +2242,7 @@ class _AIProgramsPageState extends State<AIProgramsPage> {
   }
 
   Future<void> deleteProgram(int id) async {
-    await http.delete(Uri.parse('$kBaseUrl/ai-programs/$id'), headers: {'x-device-id': widget.deviceId});
+    await http.delete(Uri.parse('$kBaseUrl/ai-programs/$id'), headers: {'Authorization': 'Bearer ${widget.deviceId}'});
     loadPrograms();
   }
 
@@ -2548,7 +2563,7 @@ class _NutritionPageV2State extends State<NutritionPageV2> {
       final today = DateTime.now().toString().substring(0, 10).split('-').reversed.join('/');
       final response = await http.get(
         Uri.parse('$kBaseUrl/food-entries/?date=${Uri.encodeComponent(today)}'),
-        headers: {'x-device-id': widget.deviceId},
+        headers: {'Authorization': 'Bearer ${widget.deviceId}'},
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
@@ -2804,7 +2819,7 @@ class _AINutritionPageState extends State<AINutritionPage> {
     try {
       final response = await http.get(
         Uri.parse('$kBaseUrl/ai-nutrition-plans/'),
-        headers: {'x-device-id': widget.deviceId},
+        headers: {'Authorization': 'Bearer ${widget.deviceId}'},
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
@@ -2816,7 +2831,7 @@ class _AINutritionPageState extends State<AINutritionPage> {
   }
 
   Future<void> deletePlan(int id) async {
-    await http.delete(Uri.parse('$kBaseUrl/ai-nutrition-plans/$id'), headers: {'x-device-id': widget.deviceId});
+    await http.delete(Uri.parse('$kBaseUrl/ai-nutrition-plans/$id'), headers: {'Authorization': 'Bearer ${widget.deviceId}'});
     loadPlans();
   }
 
@@ -3886,7 +3901,7 @@ class _ExercisePerfPageState extends State<ExercisePerfPage> with SingleTickerPr
     try {
       final response = await http.get(
         Uri.parse('$kBaseUrl/exercise-perfs/?exercise=${Uri.encodeComponent(widget.exerciseName)}'),
-        headers: {'x-device-id': widget.deviceId},
+        headers: {'Authorization': 'Bearer ${widget.deviceId}'},
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
@@ -3899,7 +3914,7 @@ class _ExercisePerfPageState extends State<ExercisePerfPage> with SingleTickerPr
   }
 
   Future<void> deletePerf(int id) async {
-    await http.delete(Uri.parse('$kBaseUrl/exercise-perfs/$id'), headers: {'x-device-id': widget.deviceId});
+    await http.delete(Uri.parse('$kBaseUrl/exercise-perfs/$id'), headers: {'Authorization': 'Bearer ${widget.deviceId}'});
     loadPerfs();
   }
 
@@ -3939,7 +3954,7 @@ class _ExercisePerfPageState extends State<ExercisePerfPage> with SingleTickerPr
                 onPressed: () async {
                   Navigator.pop(context);
                   final req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/exercise-perfs/'));
-                  req.headers['x-device-id'] = widget.deviceId;
+                  req.headers['Authorization'] = 'Bearer ${widget.deviceId}';
                   req.fields['exercise'] = widget.exerciseName;
                   req.fields['weight'] = weightCtrl.text.isNotEmpty ? weightCtrl.text : '0';
                   req.fields['reps'] = repsCtrl.text.isNotEmpty ? repsCtrl.text : '0';
@@ -4405,7 +4420,7 @@ class _NutritionTodayPageState extends State<NutritionTodayPage> with SingleTick
     try {
       final response = await http.get(
         Uri.parse('$kBaseUrl/food-entries/?date=${Uri.encodeComponent(today)}'),
-        headers: {'x-device-id': widget.deviceId},
+        headers: {'Authorization': 'Bearer ${widget.deviceId}'},
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
@@ -4418,7 +4433,7 @@ class _NutritionTodayPageState extends State<NutritionTodayPage> with SingleTick
   }
 
   Future<void> deleteEntry(int id) async {
-    await http.delete(Uri.parse('$kBaseUrl/food-entries/$id'), headers: {'x-device-id': widget.deviceId});
+    await http.delete(Uri.parse('$kBaseUrl/food-entries/$id'), headers: {'Authorization': 'Bearer ${widget.deviceId}'});
     loadEntries();
   }
 
@@ -4502,7 +4517,7 @@ class _NutritionTodayPageState extends State<NutritionTodayPage> with SingleTick
                     if (nameCtrl.text.isEmpty) return;
                     Navigator.pop(context);
                     final req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/food-entries/'));
-                    req.headers['x-device-id'] = widget.deviceId;
+                    req.headers['Authorization'] = 'Bearer ${widget.deviceId}';
                     req.fields['name'] = nameCtrl.text;
                     req.fields['calories'] = calCtrl.text.isNotEmpty ? calCtrl.text : '0';
                     req.fields['protein'] = protCtrl.text.isNotEmpty ? protCtrl.text : '0';
@@ -4549,7 +4564,7 @@ class _NutritionTodayPageState extends State<NutritionTodayPage> with SingleTick
 
     try {
       final req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/analyze-food-photo/'));
-      req.headers['x-device-id'] = widget.deviceId;
+      req.headers['Authorization'] = 'Bearer ${widget.deviceId}';
       req.files.add(http.MultipartFile.fromBytes('file', picked.files.single.bytes!, filename: picked.files.single.name));
       final res = await req.send();
       final body = await res.stream.bytesToString();
@@ -4839,7 +4854,7 @@ class _NutritionHistoryPageState extends State<NutritionHistoryPage> {
 
   Future<void> _loadAllEntries() async {
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/food-entries/'), headers: {'x-device-id': widget.deviceId});
+      final response = await http.get(Uri.parse('$kBaseUrl/food-entries/'), headers: {'Authorization': 'Bearer ${widget.deviceId}'});
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
         final map = <String, List<Map<String, dynamic>>>{};
@@ -5026,7 +5041,7 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
 
   Future<void> _loadSessions() async {
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: {'x-device-id': widget.deviceId});
+      final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: {'Authorization': 'Bearer ${widget.deviceId}'});
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
         setState(() => trainingSessions = data.map((e) => e['date'] as String).toList());
@@ -5072,7 +5087,7 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
 
       final response = await http.post(
         Uri.parse('$kBaseUrl/conversations/'),
-        headers: {'x-device-id': widget.deviceId, 'Content-Type': 'application/json'},
+        headers: {'Authorization': 'Bearer ${widget.deviceId}', 'Content-Type': 'application/json'},
       );
 
       // Utilise l'endpoint daily-message comme fallback pour générer un bilan
@@ -5080,7 +5095,7 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
 
       final r = await http.post(
         Uri.parse('$kBaseUrl/conversations/'),
-        headers: {'x-device-id': widget.deviceId},
+        headers: {'Authorization': 'Bearer ${widget.deviceId}'},
       );
 
       // Fallback : génère localement
@@ -5325,7 +5340,7 @@ class _TrainingCalendarPageState extends State<TrainingCalendarPage> {
 
   Future<void> _loadSessions() async {
     try {
-      final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: {'x-device-id': widget.deviceId});
+      final response = await http.get(Uri.parse('$kBaseUrl/training-sessions/'), headers: {'Authorization': 'Bearer ${widget.deviceId}'});
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as List;
         setState(() { trainingSessions = data.map((e) => e['date'] as String).toList(); loading = false; });
@@ -5559,15 +5574,10 @@ class _ProfilePageV2State extends State<ProfilePageV2> {
 
   Future<void> saveProfile() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('name', _nameCtrl.text);
-    await prefs.setString('age', _ageCtrl.text);
-    await prefs.setString('weight', _weightCtrl.text);
-    await prefs.setString('height', _heightCtrl.text);
-    await prefs.setString('goal', _goalCtrl.text);
-    await prefs.setString('level', selectedLevel);
+    final token = prefs.getString('auth_token') ?? '';
     final data = {'name': _nameCtrl.text, 'age': _ageCtrl.text, 'weight': _weightCtrl.text, 'height': _heightCtrl.text, 'goal': _goalCtrl.text, 'level': selectedLevel};
     var request = http.MultipartRequest('PUT', Uri.parse('$kBaseUrl/user-data/'));
-    request.headers['x-device-id'] = widget.deviceId;
+    request.headers['Authorization'] = 'Bearer $token';
     request.fields['data'] = jsonEncode(data);
     await request.send();
     setState(() => saved = true);
