@@ -124,9 +124,60 @@ class MyApp extends StatelessWidget {
     debugShowCheckedModeBanner: false,
     theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: kBg, useMaterial3: true),
     home: const SplashPage(),
+    builder: (context, child) => child!,
   );
 }
 
+
+// ===================== AUTH OVERLAY =====================
+class AuthOverlay extends StatelessWidget {
+  final Function(String token, String email) onLogin;
+  const AuthOverlay({super.key, required this.onLogin});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // Fond flouté avec image de la salle
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  kOrange.withOpacity(0.15),
+                  kBg.withOpacity(0.95),
+                  kBg,
+                ],
+              ),
+            ),
+          ),
+          // Contenu centré
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 440),
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: kCard,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: kBorder),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 40, offset: const Offset(0, 20)),
+                  ],
+                ),
+                child: AuthPage(onLogin: onLogin),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 // ===================== AUTH PAGE =====================
 class AuthPage extends StatefulWidget {
@@ -205,105 +256,90 @@ class _AuthPageState extends State<AuthPage> with SingleTickerProviderStateMixin
     }
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _anim,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 60, 28, 40),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              // Logo
-              Container(
-                width: 56, height: 56,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [kOrange, Color(0xFFFF9A6C)]),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: kOrange.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
-                ),
-                child: const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 28),
+    return FadeTransition(
+      opacity: _anim,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.zero,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Logo
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [kOrange, Color(0xFFFF9A6C)]),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: kOrange.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+            ),
+            child: const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 28),
+          ),
+          const SizedBox(height: 32),
+          Text(_isLogin ? 'Bon retour 👋' : 'Créer un compte', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, letterSpacing: -0.5)),
+          const SizedBox(height: 6),
+          Text(_isLogin ? 'Connecte-toi pour accéder à ton coach' : 'Commence ton parcours sportif IA', style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.4))),
+          const SizedBox(height: 40),
+          _label('EMAIL'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(color: kText, fontSize: 15),
+            decoration: _inputDeco('ton@email.com', Icons.email_outlined),
+          ),
+          const SizedBox(height: 20),
+          _label('MOT DE PASSE'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _passwordCtrl,
+            obscureText: _obscure,
+            style: const TextStyle(color: kText, fontSize: 15),
+            onSubmitted: (_) => _submit(),
+            decoration: _inputDeco('••••••••', Icons.lock_outline_rounded).copyWith(
+              suffixIcon: Clickable(
+                onTap: () => setState(() => _obscure = !_obscure),
+                child: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: kTextDim, size: 20),
               ),
-              const SizedBox(height: 32),
-              Text(_isLogin ? 'Bon retour 👋' : 'Créer un compte', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: kText, letterSpacing: -0.5)),
-              const SizedBox(height: 6),
-              Text(_isLogin ? 'Connecte-toi pour accéder à ton coach' : 'Commence ton parcours sportif IA', style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.4))),
-              const SizedBox(height: 40),
-
-              // Email
-              _label('EMAIL'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _emailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(color: kText, fontSize: 15),
-                decoration: _inputDeco('ton@email.com', Icons.email_outlined),
-              ),
-              const SizedBox(height: 20),
-
-              // Password
-              _label('MOT DE PASSE'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _passwordCtrl,
-                obscureText: _obscure,
-                style: const TextStyle(color: kText, fontSize: 15),
-                onSubmitted: (_) => _submit(),
-                decoration: _inputDeco('••••••••', Icons.lock_outline_rounded).copyWith(
-                  suffixIcon: Clickable(
-                    onTap: () => setState(() => _obscure = !_obscure),
-                    child: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: kTextDim, size: 20),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Error
-              if (_error != null) Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: kRed.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: kRed.withOpacity(0.3))),
-                child: Row(children: [
-                  const Icon(Icons.error_outline_rounded, color: kRed, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(_error!, style: const TextStyle(fontSize: 13, color: kRed))),
-                ]),
-              ),
-              const SizedBox(height: 24),
-
-              // Bouton submit
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _loading ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kOrange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  child: _loading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : Text(_isLogin ? 'Se connecter' : 'Créer mon compte', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Switch login/register
-              Center(child: Clickable(
-                onTap: () => setState(() { _isLogin = !_isLogin; _error = null; }),
-                child: RichText(text: TextSpan(
-                  style: const TextStyle(fontSize: 14),
-                  children: [
-                    TextSpan(text: _isLogin ? 'Pas encore de compte ? ' : 'Déjà un compte ? ', style: TextStyle(color: Colors.white.withOpacity(0.4))),
-                    TextSpan(text: _isLogin ? 'S\'inscrire' : 'Se connecter', style: const TextStyle(color: kOrange, fontWeight: FontWeight.w600)),
-                  ],
-                )),
-              )),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_error != null) Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: kRed.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: kRed.withOpacity(0.3))),
+            child: Row(children: [
+              const Icon(Icons.error_outline_rounded, color: kRed, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text(_error!, style: const TextStyle(fontSize: 13, color: kRed))),
             ]),
           ),
-        ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _loading ? null : _submit,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kOrange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              child: _loading
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(_isLogin ? 'Se connecter' : 'Créer mon compte', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Center(child: Clickable(
+            onTap: () => setState(() { _isLogin = !_isLogin; _error = null; }),
+            child: RichText(text: TextSpan(
+              style: const TextStyle(fontSize: 14),
+              children: [
+                TextSpan(text: _isLogin ? 'Pas encore de compte ? ' : 'Déjà un compte ? ', style: TextStyle(color: Colors.white.withOpacity(0.4))),
+                TextSpan(text: _isLogin ? 'S\'inscrire' : 'Se connecter', style: const TextStyle(color: kOrange, fontWeight: FontWeight.w600)),
+              ],
+            )),
+          )),
+        ]),
       ),
     );
   }
@@ -350,14 +386,18 @@ class _SplashPageState extends State<SplashPage> {
       );
     } else {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => AuthPage(
-          onLogin: (token, email) {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => RootPage(token: token)),
-              (route) => false,
-            );
-          },
-        )),
+        PageRouteBuilder(
+          opaque: false,
+          barrierColor: Colors.black.withOpacity(0.85),
+          pageBuilder: (_, __, ___) => AuthOverlay(
+            onLogin: (token, email) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => RootPage(token: token)),
+                (route) => false,
+              );
+            },
+          ),
+        ),
         (route) => false,
       );
     }
@@ -1297,7 +1337,7 @@ class CoachPageV2 extends StatefulWidget {
 class _CoachPageV2State extends State<CoachPageV2> {
   List<Map<String, dynamic>> conversations = [];
   int? activeConvId;
-  bool sidebarOpen = true;
+  bool sidebarOpen = false;
   String? _pendingSuggestion;
   bool _showWelcome = true;
 

@@ -18,7 +18,7 @@ ajouter des programmes predefinis dans training
 
 ajouter des exos dans mes exercices dans progres
 
-systeme de log par mail
+OK systeme de log par mail
 
 retravailler interface, remplacere emojis, faire des videos pour les exo et nutritions
 
