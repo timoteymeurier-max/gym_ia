@@ -111,6 +111,15 @@ class FoodEntry(Base):
     date = Column(String)
     created_at = Column(DateTime, default=datetime.now)
 
+class WorkoutDetail(Base):
+    __tablename__ = "workout_details"
+    id = Column(Integer, primary_key=True)
+    device_id = Column(String, default="default")
+    date = Column(String)
+    exercises = Column(Text, nullable=True)  # JSON
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+
 class TrainingSession(Base):
     __tablename__ = "training_sessions"
     id = Column(Integer, primary_key=True)
@@ -964,3 +973,36 @@ async def migrate():
         conn.execute(text("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS device_id VARCHAR DEFAULT 'default'"))
         conn.commit()
     return {"message": "Migration OK"}
+
+
+@app.get("/workout-details/")
+async def get_workout_details(date: str = "", authorization: str = Header(default=""), x_device_id: str = Header(default="default")):
+    device_id = get_device_id(authorization, x_device_id)
+    db = DBSession()
+    query = db.query(WorkoutDetail).filter(WorkoutDetail.device_id == device_id)
+    if date:
+        query = query.filter(WorkoutDetail.date == date)
+    details = query.all()
+    result = [{"id": d.id, "date": d.date, "exercises": json.loads(d.exercises or "[]"), "notes": d.notes} for d in details]
+    db.close()
+    return result
+
+@app.post("/workout-details/")
+async def save_workout_detail(
+    date: str = Form(...),
+    exercises: str = Form(default="[]"),
+    notes: str = Form(default=""),
+    authorization: str = Header(default=""),
+    x_device_id: str = Header(default="default")
+):
+    device_id = get_device_id(authorization, x_device_id)
+    db = DBSession()
+    existing = db.query(WorkoutDetail).filter(WorkoutDetail.device_id == device_id, WorkoutDetail.date == date).first()
+    if existing:
+        existing.exercises = exercises
+        existing.notes = notes
+    else:
+        db.add(WorkoutDetail(device_id=device_id, date=date, exercises=exercises, notes=notes))
+    db.commit()
+    db.close()
+    return {"message": "saved"}
