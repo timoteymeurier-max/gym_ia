@@ -1009,3 +1009,14 @@ async def save_workout_detail(
     db.commit()
     db.close()
     return {"message": "saved"}
+
+@app.get("/migrate-workout/")
+async def migrate_workout():
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE workout_details ADD COLUMN IF NOT EXISTS session_name VARCHAR"))
+            conn.commit()
+        except:
+            pass
+    return {"message": "Migration OK"}
