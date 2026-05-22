@@ -23,3 +23,5 @@ OK systeme de log par mail
 retravailler interface, remplacere emojis, faire des videos pour les exo et nutritions
 
 entrainer l'ia pour analyser different exo, pour analyser les plats
+
+

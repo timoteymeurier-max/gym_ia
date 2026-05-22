@@ -116,7 +116,8 @@ class WorkoutDetail(Base):
     id = Column(Integer, primary_key=True)
     device_id = Column(String, default="default")
     date = Column(String)
-    exercises = Column(Text, nullable=True)  # JSON
+    session_name = Column(String, nullable=True)
+    exercises = Column(Text, nullable=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
 
@@ -983,13 +984,14 @@ async def get_workout_details(date: str = "", authorization: str = Header(defaul
     if date:
         query = query.filter(WorkoutDetail.date == date)
     details = query.all()
-    result = [{"id": d.id, "date": d.date, "exercises": json.loads(d.exercises or "[]"), "notes": d.notes} for d in details]
+    result = [{"id": d.id, "date": d.date, "session_name": d.session_name, "exercises": json.loads(d.exercises or "[]"), "notes": d.notes} for d in details]
     db.close()
     return result
 
 @app.post("/workout-details/")
 async def save_workout_detail(
     date: str = Form(...),
+    session_name: str = Form(default=""),
     exercises: str = Form(default="[]"),
     notes: str = Form(default=""),
     authorization: str = Header(default=""),
@@ -999,10 +1001,11 @@ async def save_workout_detail(
     db = DBSession()
     existing = db.query(WorkoutDetail).filter(WorkoutDetail.device_id == device_id, WorkoutDetail.date == date).first()
     if existing:
+        existing.session_name = session_name
         existing.exercises = exercises
         existing.notes = notes
     else:
-        db.add(WorkoutDetail(device_id=device_id, date=date, exercises=exercises, notes=notes))
+        db.add(WorkoutDetail(device_id=device_id, date=date, session_name=session_name, exercises=exercises, notes=notes))
     db.commit()
     db.close()
     return {"message": "saved"}

@@ -33,6 +33,10 @@ const kRed = Color(0xFFF87171);
 const String kBaseUrl = 'https://gym-ia-n9tf.onrender.com';
 
 // ===================== MOCK DATA =====================
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+
 final mockExercises = [
   {'name': 'Squat', 'muscle': 'Quadriceps', 'type': 'Poids libre', 'difficulty': 'Intermédiaire', 'icon': '🦵', 'color': kOrange},
   {'name': 'Développé couché', 'muscle': 'Pectoraux', 'type': 'Poids libre', 'difficulty': 'Intermédiaire', 'icon': '💪', 'color': kBlue},
@@ -121,6 +125,7 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
+    navigatorKey: navigatorKey,
     debugShowCheckedModeBanner: false,
     theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: kBg, useMaterial3: true),
     home: const SplashPage(),
@@ -671,7 +676,7 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
       backgroundColor: kBg,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => WorkoutFormSheet(date: date, deviceId: widget.deviceId),
+      builder: (ctx) => DayDetailSheet(date: date, deviceId: widget.deviceId, isDone: true, parentContext: context),
     );
   }
 
@@ -1169,55 +1174,17 @@ class _HomePageV2State extends State<HomePageV2> with TickerProviderStateMixin {
   }
 
   void _confirmToggle(String date) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: kBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('💪', style: TextStyle(fontSize: 40)),
-            const SizedBox(height: 12),
-            const Text('Séance confirmée ?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
-            const SizedBox(height: 8),
-            Text('Tu confirmes être allé à la salle aujourd\'hui ?', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5))),
-            const SizedBox(height: 20),
-            Row(children: [
-              Expanded(child: Clickable(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
-                  child: const Center(child: Text('Annuler', style: TextStyle(fontSize: 14, color: kTextDim))),
-                ),
-              )),
-              const SizedBox(width: 12),
-              Expanded(child: Clickable(
-                onTap: () {
-                  Navigator.pop(context);
-                  widget.onToggleSession(date);
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    if (mounted) {
-                      showModalBottomSheet(
-                        context: context,
-                        backgroundColor: kBg,
-                        isScrollControlled: true,
-                        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-                        builder: (context) => WorkoutFormSheet(date: date, deviceId: widget.deviceId),
-                      );
-                    }
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)),
-                  child: const Center(child: Text('Oui, j\'y étais !', style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600))),
-                ),
-              )),
-            ]),
-          ]),
-        ),
+      backgroundColor: kBg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DayDetailSheet(
+        date: date,
+        deviceId: widget.deviceId,
+        isDone: false,
+        parentContext: context,
+        onConfirmSession: () => widget.onToggleSession(date),
       ),
     );
   }
@@ -3554,7 +3521,7 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
                       backgroundColor: kBg,
                       isScrollControlled: true,
                       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-                      builder: (ctx) => WorkoutFormSheet(date: day['date'] as String, deviceId: widget.deviceId),
+                      builder: (ctx) => DayDetailSheet(date: day['date'] as String, deviceId: widget.deviceId, isDone: true),
                     );
                   }
                 } : done ? () => showModalBottomSheet(
@@ -3562,7 +3529,7 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
                   backgroundColor: kBg,
                   isScrollControlled: true,
                   shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-                  builder: (ctx) => WorkoutFormSheet(date: day['date'] as String, deviceId: widget.deviceId),
+                  builder: (ctx) => DayDetailSheet(date: day['date'] as String, deviceId: widget.deviceId, isDone: true),
                 ) : () {},
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
@@ -3637,54 +3604,17 @@ class _ProgressPageV2State extends State<ProgressPageV2> with TickerProviderStat
   }
 
 void _confirmToggleProgress(String date) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: kBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('💪', style: TextStyle(fontSize: 40)),
-            const SizedBox(height: 12),
-            const Text('Séance confirmée ?', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: kText)),
-            const SizedBox(height: 8),
-            Text('Tu confirmes être allé à la salle aujourd\'hui ?', textAlign: TextAlign.center, style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5))),
-            const SizedBox(height: 20),
-            Row(children: [
-              Expanded(child: Clickable(
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
-                  child: const Center(child: Text('Annuler', style: TextStyle(fontSize: 14, color: kTextDim))),
-                ),
-              )),
-              const SizedBox(width: 12),
-              Expanded(child: Clickable(
-                onTap: () {
-                  Navigator.pop(context);
-                  widget.onToggleSession(date);
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    if (!context.mounted) return;
-                    showModalBottomSheet(
-                      context: context,
-                      backgroundColor: kBg,
-                      isScrollControlled: true,
-                      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-                      builder: (ctx) => WorkoutFormSheet(date: date, deviceId: widget.deviceId),
-                    );
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(color: kOrange, borderRadius: BorderRadius.circular(12)),
-                  child: const Center(child: Text('Oui, j\'y étais !', style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600))),
-                ),
-              )),
-            ]),
-          ]),
-        ),
+      backgroundColor: kBg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DayDetailSheet(
+        date: date,
+        deviceId: widget.deviceId,
+        isDone: false,
+        parentContext: context,
+        onConfirmSession: () => widget.onToggleSession(date),
       ),
     );
   }
@@ -3696,7 +3626,7 @@ void _confirmToggleProgress(String date) {
       backgroundColor: kBg,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => WorkoutFormSheet(date: date, deviceId: widget.deviceId),
+      builder: (ctx) => DayDetailSheet(date: date, deviceId: widget.deviceId, isDone: true, parentContext: context),
     );
   }
 
@@ -5189,8 +5119,10 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
   late Animation<double> _anim;
   String _bilanIA = '';
   bool _loadingBilan = false;
+  
 
   final days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  Map<String, Map<String, dynamic>> workoutByDate = {};
   List<String> trainingSessions = [];
 
   Future<void> _loadSessions() async {
@@ -5288,15 +5220,22 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
     final squat = widget.userData['squat_weight'] ?? '--';
 
     // Données mockées semaine
-    final seanceDetails = [
-      {'day': 'Lundi', 'exos': 'Squat, Leg press, Fentes', 'duration': '65 min', 'volume': '4200 kg', 'done': true},
-      {'day': 'Mardi', 'exos': 'Développé couché, Triceps', 'duration': '55 min', 'volume': '3100 kg', 'done': true},
-      {'day': 'Mercredi', 'exos': 'Repos', 'duration': '--', 'volume': '--', 'done': false},
-      {'day': 'Jeudi', 'exos': 'Tractions, Rowing barre', 'duration': '60 min', 'volume': '2800 kg', 'done': true},
-      {'day': 'Vendredi', 'exos': 'Non effectuée', 'duration': '--', 'volume': '--', 'done': false},
-      {'day': 'Samedi', 'exos': 'Non effectuée', 'duration': '--', 'volume': '--', 'done': false},
-      {'day': 'Dimanche', 'exos': 'Non effectuée', 'duration': '--', 'volume': '--', 'done': false},
-    ];
+    final dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    final seanceDetails = List.generate(7, (i) {
+      final isDone = done[i];
+      final detail = workoutByDate[weekDates[i]];
+      final exercises = detail != null ? (detail['exercises'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList() : <Map<String, dynamic>>[];
+      final sessionName = detail?['session_name'] as String? ?? '';
+      final exosStr = sessionName.isNotEmpty ? sessionName : exercises.isNotEmpty ? exercises.map((e) => e['name'] as String? ?? '').where((n) => n.isNotEmpty).join(', ') : isDone ? 'Séance effectuée' : 'Non effectuée';
+      return {
+        'day': dayNames[i],
+        'date': weekDates[i],
+        'exos': exosStr,
+        'done': isDone,
+        'exercises': exercises,
+        'notes': detail?['notes'] as String? ?? '',
+      };
+    });
 
     return Scaffold(
       backgroundColor: kBg,
@@ -5377,38 +5316,41 @@ class _BilanSemainePageState extends State<BilanSemainePage> with SingleTickerPr
           ...seanceDetails.map((s) {
             final isDone = s['done'] as bool;
             final color = isDone ? kBlue : kTextDim;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: kCard,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: isDone ? kBlue.withOpacity(0.2) : kBorder),
-              ),
-              child: Row(children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Center(child: Icon(
-                    isDone ? Icons.fitness_center_rounded : Icons.hotel_rounded,
-                    color: color, size: 18,
-                  )),
+            return Clickable(
+              onTap: () => showModalBottomSheet(
+                context: context,
+                backgroundColor: kBg,
+                isScrollControlled: true,
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+                builder: (ctx) => DayDetailSheet(
+                  date: s['date'] as String,
+                  deviceId: widget.deviceId,
+                  isDone: isDone,
+                  onConfirmSession: isDone ? null : () {},
                 ),
-                const SizedBox(width: 12),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(s['day'] as String, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDone ? kText : kTextDim)),
-                  Text(s['exos'] as String, style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(isDone ? 0.5 : 0.2)), overflow: TextOverflow.ellipsis),
-                ])),
-                if (isDone) ...[
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text(s['duration'] as String, style: const TextStyle(fontSize: 11, color: kBlue, fontWeight: FontWeight.w600)),
-                    Text(s['volume'] as String, style: const TextStyle(fontSize: 10, color: kTextDim)),
-                  ]),
-                ],
-              ]),
+              ),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kCard,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: isDone ? kBlue.withOpacity(0.2) : kBorder),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                    child: Center(child: Icon(isDone ? Icons.fitness_center_rounded : Icons.hotel_rounded, color: color, size: 18)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(s['day'] as String, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isDone ? kText : kTextDim)),
+                    Text(s['exos'] as String, style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(isDone ? 0.5 : 0.2)), overflow: TextOverflow.ellipsis),
+                  ])),
+                  if (isDone) const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: kTextDim),
+                ]),
+              ),
             );
           }).toList(),
           const SizedBox(height: 20),
@@ -5496,210 +5438,12 @@ class _TrainingCalendarPageState extends State<TrainingCalendarPage> {
   }
 
 void _showDayDetail(BuildContext context, DateTime day, String dateStr, bool isDone, List<Map<String, dynamic>> foodEntries) {
-    final dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-    final dayName = dayNames[day.weekday - 1];
-    final totalCal = foodEntries.fold(0.0, (sum, e) => sum + (e['calories'] as num? ?? 0).toDouble());
-    final totalProt = foodEntries.fold(0.0, (sum, e) => sum + (e['protein'] as num? ?? 0).toDouble());
-    final mealOrder = ['petit_dejeuner', 'dejeuner', 'diner', 'collation'];
-    final mealLabels = {'petit_dejeuner': '🌅 Petit déjeuner', 'dejeuner': '☀️ Déjeuner', 'diner': '🌙 Dîner', 'collation': '🍎 Collation'};
-    final workoutDetail = workoutByDate[dateStr];
-    final exercises = workoutDetail != null ? (workoutDetail['exercises'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList() : <Map<String, dynamic>>[];
-    final notes = workoutDetail?['notes'] as String? ?? '';
-
     showModalBottomSheet(
       context: context,
       backgroundColor: kBg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.75,
-        maxChildSize: 0.95,
-        minChildSize: 0.4,
-        expand: false,
-        builder: (context, scrollController) => SingleChildScrollView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // Handle
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kBorder, borderRadius: BorderRadius.circular(2)))),
-            const SizedBox(height: 16),
-
-            // Header
-            Row(children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(dayName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kText)),
-                Text(dateStr, style: const TextStyle(fontSize: 13, color: kTextDim)),
-              ]),
-              const Spacer(),
-              if (isDone) Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: kOrange.withOpacity(0.3))),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.fitness_center_rounded, color: kOrange, size: 14),
-                  SizedBox(width: 6),
-                  Text('Séance effectuée', style: TextStyle(fontSize: 12, color: kOrange, fontWeight: FontWeight.w600)),
-                ]),
-              ) else Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.hotel_rounded, color: kTextDim, size: 14),
-                  SizedBox(width: 6),
-                  Text('Repos', style: TextStyle(fontSize: 12, color: kTextDim)),
-                ]),
-              ),
-            ]),
-            const SizedBox(height: 24),
-
-            // ── SECTION SÉANCE ──────────────────────────────
-            const Text('SÉANCE', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-            const SizedBox(height: 12),
-
-            if (exercises.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
-                child: Row(children: [
-                  const Icon(Icons.fitness_center_outlined, color: kTextDim, size: 20),
-                  const SizedBox(width: 12),
-                  Text('Aucun exercice enregistré', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3))),
-                ]),
-              )
-            else ...[
-              ...exercises.map((ex) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kOrange.withOpacity(0.2))),
-                child: Row(children: [
-                  Container(
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(color: kOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                    child: const Center(child: Icon(Icons.fitness_center_rounded, color: kOrange, size: 16)),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(ex['name'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
-                    if (ex['sets'] != null || ex['reps'] != null || ex['weight'] != null)
-                      Text(
-                        [
-                          if (ex['sets']?.toString().isNotEmpty == true) '${ex['sets']} séries',
-                          if (ex['reps']?.toString().isNotEmpty == true) '${ex['reps']} reps',
-                          if (ex['weight']?.toString().isNotEmpty == true) '${ex['weight']} kg',
-                        ].join(' · '),
-                        style: const TextStyle(fontSize: 12, color: kTextDim),
-                      ),
-                  ])),
-                ]),
-              )).toList(),
-              if (notes.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Icon(Icons.notes_rounded, color: kTextDim, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(notes, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6)))),
-                  ]),
-                ),
-              ],
-            ],
-
-            const SizedBox(height: 20),
-
-            // ── SECTION NUTRITION ──────────────────────────
-            const Text('NUTRITION', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
-            const SizedBox(height: 12),
-
-            if (foodEntries.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
-                child: Row(children: [
-                  const Icon(Icons.restaurant_outlined, color: kTextDim, size: 20),
-                  const SizedBox(width: 12),
-                  Text('Aucun repas enregistré ce jour', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3))),
-                ]),
-              )
-            else ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: kGreen.withOpacity(0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.2))),
-                child: Row(children: [
-                  const Icon(Icons.local_fire_department_rounded, color: kGreen, size: 18),
-                  const SizedBox(width: 8),
-                  Text('${totalCal.toStringAsFixed(0)} kcal', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kGreen)),
-                  const SizedBox(width: 12),
-                  Text('· ${totalProt.toStringAsFixed(0)}g protéines', style: const TextStyle(fontSize: 12, color: kTextDim)),
-                  const Spacer(),
-                  Text('${foodEntries.length} aliments', style: const TextStyle(fontSize: 11, color: kTextDim)),
-                ]),
-              ),
-              const SizedBox(height: 10),
-              ...mealOrder.map((mealKey) {
-                final items = foodEntries.where((e) => e['meal_type'] == mealKey).toList();
-                if (items.isEmpty) return const SizedBox();
-                final mealCal = items.fold(0.0, (sum, e) => sum + (e['calories'] as num? ?? 0).toDouble());
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
-                  child: Column(children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                      child: Row(children: [
-                        Text(mealLabels[mealKey] ?? mealKey, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
-                        const Spacer(),
-                        Text('${mealCal.toStringAsFixed(0)} kcal', style: const TextStyle(fontSize: 11, color: kTextDim)),
-                      ]),
-                    ),
-                    ...items.map((item) => Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
-                      child: Row(children: [
-                        Container(width: 5, height: 5, decoration: BoxDecoration(color: kGreen.withOpacity(0.5), shape: BoxShape.circle)),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(item['name'] as String? ?? '', style: const TextStyle(fontSize: 12, color: kTextMid))),
-                        if (item['calories'] != null && (item['calories'] as num) > 0)
-                          Text('${(item['calories'] as num).toStringAsFixed(0)} kcal', style: const TextStyle(fontSize: 11, color: kTextDim)),
-                      ]),
-                    )).toList(),
-                  ]),
-                );
-              }).toList(),
-            ],
-
-            const SizedBox(height: 24),
-
-            // ── BOUTON MODIFIER ────────────────────────────
-            if (isDone) SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    if (!mounted) return;
-                    showModalBottomSheet(
-                      context: this.context,
-                      backgroundColor: kBg,
-                      isScrollControlled: true,
-                      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-                      builder: (ctx) => WorkoutFormSheet(date: dateStr, deviceId: widget.deviceId),
-                    ).then((_) => _loadSessions());
-                  });
-                },
-                icon: const Icon(Icons.edit_rounded, size: 16),
-                label: const Text('Modifier la séance', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kOrange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-              ),
-            ),
-          ]),
-        ),
-      ),
+      builder: (context) => DayDetailSheet(date: dateStr, deviceId: widget.deviceId, isDone: isDone),
     );
   }
   
@@ -5953,7 +5697,247 @@ void _showDayDetail(BuildContext context, DateTime day, String dateStr, bool isD
   ));
 }
 
+// ===================== DAY DETAIL SHEET =====================
+class DayDetailSheet extends StatefulWidget {
+  final String date;
+  final String deviceId;
+  final bool isDone;
+  final BuildContext? parentContext;
+  final VoidCallback? onConfirmSession;
+  const DayDetailSheet({super.key, required this.date, required this.deviceId, required this.isDone, this.parentContext, this.onConfirmSession});
+  @override
+  State<DayDetailSheet> createState() => _DayDetailSheetState();
+}
 
+class _DayDetailSheetState extends State<DayDetailSheet> {
+  List<Map<String, dynamic>> foodEntries = [];
+  Map<String, dynamic>? workoutDetail;
+  bool loading = true;
+  bool _sessionConfirmed = false;
+
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final headers = {'Authorization': 'Bearer ${widget.deviceId}'};
+      final foodRes = await http.get(Uri.parse('$kBaseUrl/food-entries/?date=${Uri.encodeComponent(widget.date)}'), headers: headers);
+      final workoutRes = await http.get(Uri.parse('$kBaseUrl/workout-details/?date=${Uri.encodeComponent(widget.date)}'), headers: headers);
+      if (foodRes.statusCode == 200) {
+        final data = jsonDecode(foodRes.body) as List;
+        foodEntries = data.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+      if (workoutRes.statusCode == 200) {
+        final data = jsonDecode(workoutRes.body) as List;
+        if (data.isNotEmpty) workoutDetail = Map<String, dynamic>.from(data.first);
+      }
+    } catch (_) {}
+    setState(() => loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final exercises = workoutDetail != null ? (workoutDetail!['exercises'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList() : <Map<String, dynamic>>[];
+    final notes = workoutDetail?['notes'] as String? ?? '';
+    final totalCal = foodEntries.fold(0.0, (sum, e) => sum + (e['calories'] as num? ?? 0).toDouble());
+    final totalProt = foodEntries.fold(0.0, (sum, e) => sum + (e['protein'] as num? ?? 0).toDouble());
+    final mealOrder = ['petit_dejeuner', 'dejeuner', 'diner', 'collation'];
+    final mealLabels = {'petit_dejeuner': '🌅 Petit déjeuner', 'dejeuner': '☀️ Déjeuner', 'diner': '🌙 Dîner', 'collation': '🍎 Collation'};
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
+      minChildSize: 0.4,
+      expand: false,
+      builder: (context, scrollController) => loading
+          ? const Center(child: CircularProgressIndicator(color: kOrange, strokeWidth: 2))
+          : SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: kBorder, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 16),
+
+                // Header
+                Row(children: [
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(widget.date, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kText)),
+                    Text(widget.isDone ? 'Séance effectuée' : 'Jour de repos', style: TextStyle(fontSize: 13, color: widget.isDone ? kOrange : kTextDim)),
+                  ]),
+                  const Spacer(),
+                  if (widget.isDone) Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: kOrange.withOpacity(0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: kOrange.withOpacity(0.3))),
+                    child: const Icon(Icons.fitness_center_rounded, color: kOrange, size: 16),
+                  ),
+                ]),
+                const SizedBox(height: 24),
+
+                // ── SÉANCE ──────────────────────────────────
+                const Text('SÉANCE', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                const SizedBox(height: 12),
+                if (exercises.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
+                    child: Row(children: [
+                      const Icon(Icons.fitness_center_outlined, color: kTextDim, size: 20),
+                      const SizedBox(width: 12),
+                      Text('Aucun exercice enregistré', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3))),
+                    ]),
+                  )
+                else ...[
+                  ...exercises.map((ex) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kOrange.withOpacity(0.2))),
+                    child: Row(children: [
+                      Container(width: 36, height: 36, decoration: BoxDecoration(color: kOrange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: const Center(child: Icon(Icons.fitness_center_rounded, color: kOrange, size: 16))),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(ex['name'] as String? ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+                        Text([
+                          if ((ex['sets']?.toString() ?? '').isNotEmpty) '${ex['sets']} séries',
+                          if ((ex['reps']?.toString() ?? '').isNotEmpty) '${ex['reps']} reps',
+                          if ((ex['weight']?.toString() ?? '').isNotEmpty) '${ex['weight']} kg',
+                        ].join(' · '), style: const TextStyle(fontSize: 12, color: kTextDim)),
+                      ])),
+                    ]),
+                  )).toList(),
+                  if (notes.isNotEmpty) Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Icon(Icons.notes_rounded, color: kTextDim, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(notes, style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.6)))),
+                    ]),
+                  ),
+                ],
+                const SizedBox(height: 20),
+
+                // ── NUTRITION ───────────────────────────────
+                const Text('NUTRITION', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                const SizedBox(height: 12),
+                if (foodEntries.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
+                    child: Row(children: [
+                      const Icon(Icons.restaurant_outlined, color: kTextDim, size: 20),
+                      const SizedBox(width: 12),
+                      Text('Aucun repas enregistré ce jour', style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.3))),
+                    ]),
+                  )
+                else ...[
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: kGreen.withOpacity(0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: kGreen.withOpacity(0.2))),
+                    child: Row(children: [
+                      const Icon(Icons.local_fire_department_rounded, color: kGreen, size: 18),
+                      const SizedBox(width: 8),
+                      Text('${totalCal.toStringAsFixed(0)} kcal', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: kGreen)),
+                      const SizedBox(width: 12),
+                      Text('· ${totalProt.toStringAsFixed(0)}g protéines', style: const TextStyle(fontSize: 12, color: kTextDim)),
+                      const Spacer(),
+                      Text('${foodEntries.length} aliments', style: const TextStyle(fontSize: 11, color: kTextDim)),
+                    ]),
+                  ),
+                  const SizedBox(height: 10),
+                  ...mealOrder.map((mealKey) {
+                    final items = foodEntries.where((e) => e['meal_type'] == mealKey).toList();
+                    if (items.isEmpty) return const SizedBox();
+                    final mealCal = items.fold(0.0, (sum, e) => sum + (e['calories'] as num? ?? 0).toDouble());
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+                      child: Column(children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                          child: Row(children: [
+                            Text(mealLabels[mealKey] ?? mealKey, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: kText)),
+                            const Spacer(),
+                            Text('${mealCal.toStringAsFixed(0)} kcal', style: const TextStyle(fontSize: 11, color: kTextDim)),
+                          ]),
+                        ),
+                        ...items.map((item) => Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
+                          child: Row(children: [
+                            Container(width: 5, height: 5, decoration: BoxDecoration(color: kGreen.withOpacity(0.5), shape: BoxShape.circle)),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(item['name'] as String? ?? '', style: const TextStyle(fontSize: 12, color: kTextMid))),
+                            if (item['calories'] != null && (item['calories'] as num) > 0)
+                              Text('${(item['calories'] as num).toStringAsFixed(0)} kcal', style: const TextStyle(fontSize: 11, color: kTextDim)),
+                          ]),
+                        )).toList(),
+                      ]),
+                    );
+                  }).toList(),
+                ],
+                const SizedBox(height: 24),
+
+                // ── BOUTONS ──────────────────────────────────
+                if (!widget.isDone && !_sessionConfirmed) SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      widget.onConfirmSession?.call();
+                      setState(() => _sessionConfirmed = true);
+                    },
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: const Text('Confirmer la séance', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (widget.isDone || _sessionConfirmed) SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        showModalBottomSheet(
+                          context: navigatorKey.currentContext!,
+                          backgroundColor: kBg,
+                          isScrollControlled: true,
+                          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+                          builder: (ctx) => WorkoutFormSheet(date: widget.date, deviceId: widget.deviceId),
+                        );
+                      });
+                    },
+                    icon: const Icon(Icons.edit_rounded, size: 16),
+                    label: const Text('Modifier la séance', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(backgroundColor: kOrange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        Navigator.push(
+                          navigatorKey.currentContext!,
+                          MaterialPageRoute(builder: (_) => NutritionTodayPage(deviceId: widget.deviceId)),
+                        );
+                      });
+                    },
+                    icon: const Icon(Icons.restaurant_rounded, size: 16),
+                    label: const Text('Modifier la nutrition', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    style: ElevatedButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 0),
+                  ),
+                ),
+              ]),
+            ),
+    );
+  }
+}
 // ===================== WORKOUT FORM SHEET =====================
 
 
@@ -5969,6 +5953,7 @@ class _WorkoutFormSheetState extends State<WorkoutFormSheet> {
   final List<Map<String, dynamic>> exercises = [];
   final List<Map<String, TextEditingController>> _controllers = [];
   final TextEditingController _notesCtrl = TextEditingController();
+  final TextEditingController _sessionNameCtrl = TextEditingController();
   bool saving = false;
   bool loading = true;
 
@@ -5992,6 +5977,7 @@ class _WorkoutFormSheetState extends State<WorkoutFormSheet> {
           final detail = data.first;
           final exList = (detail['exercises'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList();
           _notesCtrl.text = detail['notes'] as String? ?? '';
+          _sessionNameCtrl.text = detail['session_name'] as String? ?? '';
           for (final ex in exList) {
             _addExerciseWithData(
               name: ex['name']?.toString() ?? '',
@@ -6030,6 +6016,7 @@ class _WorkoutFormSheetState extends State<WorkoutFormSheet> {
   @override
   void dispose() {
     _notesCtrl.dispose();
+    _sessionNameCtrl.dispose();
     for (final ctrlMap in _controllers) {
       ctrlMap.values.forEach((c) => c.dispose());
     }
@@ -6049,6 +6036,7 @@ class _WorkoutFormSheetState extends State<WorkoutFormSheet> {
       final req = http.MultipartRequest('POST', Uri.parse('$kBaseUrl/workout-details/'));
       req.headers['Authorization'] = 'Bearer ${widget.deviceId}';
       req.fields['date'] = widget.date;
+      req.fields['session_name'] = _sessionNameCtrl.text;
       req.fields['exercises'] = jsonEncode(exData);
       req.fields['notes'] = _notesCtrl.text;
       await req.send();
@@ -6084,6 +6072,14 @@ class _WorkoutFormSheetState extends State<WorkoutFormSheet> {
                   Clickable(onTap: () => Navigator.pop(context), child: const Icon(Icons.close_rounded, color: kTextDim, size: 22)),
                 ]),
                 const SizedBox(height: 24),
+
+                // Nom de la séance
+                const Text('NOM DE LA SÉANCE', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
+                const SizedBox(height: 8),
+                _SessionNameField(controller: _sessionNameCtrl),
+                const SizedBox(height: 20),
+
+                // Exercices
                 Row(children: [
                   const Text('EXERCICES', style: TextStyle(fontSize: 11, color: Color(0xFF555555), fontWeight: FontWeight.w600, letterSpacing: 1.2)),
                   const Spacer(),
@@ -6125,10 +6121,8 @@ class _WorkoutFormSheetState extends State<WorkoutFormSheet> {
                       decoration: BoxDecoration(color: kCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
                       child: Column(children: [
                         Row(children: [
-                          Expanded(child: TextField(
-                            controller: ctrlMap['name'],
-                            style: const TextStyle(color: kText, fontSize: 14),
-                            decoration: _inputDeco('Nom exercice (ex: Squat)'),
+                          Expanded(child: _ExerciseSearchField(
+                            controller: ctrlMap['name']!,
                           )),
                           const SizedBox(width: 8),
                           Clickable(onTap: () => _removeExercise(i), child: Icon(Icons.close_rounded, size: 16, color: Colors.white.withOpacity(0.3))),
@@ -6185,6 +6179,196 @@ class _WorkoutFormSheetState extends State<WorkoutFormSheet> {
   );
 }
 
+
+class _ExerciseSearchField extends StatefulWidget {
+  final TextEditingController controller;
+  const _ExerciseSearchField({required this.controller});
+  @override
+  State<_ExerciseSearchField> createState() => _ExerciseSearchFieldState();
+}
+
+class _ExerciseSearchFieldState extends State<_ExerciseSearchField> {
+  final FocusNode _focusNode = FocusNode();
+  bool _showDropdown = false;
+  List<String> _filtered = [];
+
+  final List<String> _allExercises = [
+    'Squat', 'Développé couché', 'Soulevé de terre', 'Tractions', 'Développé militaire',
+    'Curl biceps', 'Triceps poulie', 'Leg press', 'Rowing barre', 'Hip thrust',
+    'Fentes', 'Tirage vertical', 'Dips', 'Curl marteau', 'Shrugs',
+    'Leg curl', 'Leg extension', 'Calf raises', 'Face pull', 'Tirage horizontal',
+    'Incliné couché', 'Décliné couché', 'Pec deck', 'Butterfly', 'Arnold press',
+    'Élévations latérales', 'Élévations frontales', 'Rowing haltère', 'Pull over',
+    'Crunchs', 'Planche', 'Russian twist', 'Leg raise', 'Ab wheel',
+  ];
+
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) setState(() => _showDropdown = false);
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String val) {
+    setState(() {
+      _filtered = _allExercises.where((e) => e.toLowerCase().contains(val.toLowerCase())).toList();
+      _showDropdown = val.isNotEmpty && _filtered.isNotEmpty;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        style: const TextStyle(color: kText, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Nom exercice (ex: Squat)',
+          hintStyle: const TextStyle(color: Color(0xFF444444), fontSize: 13),
+          filled: true, fillColor: kCard2,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+        onChanged: _onChanged,
+      ),
+      if (_showDropdown) Container(
+        constraints: const BoxConstraints(maxHeight: 180),
+        decoration: BoxDecoration(
+          color: kCard2,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: kBorder),
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          children: _filtered.map((ex) => Clickable(
+            onTap: () {
+              setState(() {
+                widget.controller.text = ex;
+                _showDropdown = false;
+              });
+              _focusNode.unfocus();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: kBorder.withOpacity(0.5)))),
+              child: Row(children: [
+                const Icon(Icons.fitness_center_rounded, size: 14, color: kOrange),
+                const SizedBox(width: 10),
+                Text(ex, style: const TextStyle(fontSize: 13, color: kText)),
+              ]),
+            ),
+          )).toList(),
+        ),
+      ),
+    ]);
+  }
+}
+
+class _SessionNameField extends StatefulWidget {
+  final TextEditingController controller;
+  const _SessionNameField({required this.controller});
+  @override
+  State<_SessionNameField> createState() => _SessionNameFieldState();
+}
+
+class _SessionNameFieldState extends State<_SessionNameField> {
+  final FocusNode _focusNode = FocusNode();
+  bool _showDropdown = false;
+
+  final List<String> _sessions = [
+    'Push', 'Pull', 'Legs', 'Full Body', 'Upper', 'Lower',
+    'Chest & Triceps', 'Back & Biceps', 'Shoulders & Arms',
+    'Quadriceps & Fessiers', 'Ischio & Mollets', 'Cardio',
+    'Force', 'Hypertrophie', 'Mobilité & Stretching',
+  ];
+
+  List<String> get _filtered => widget.controller.text.isEmpty
+      ? _sessions
+      : _sessions.where((s) => s.toLowerCase().contains(widget.controller.text.toLowerCase())).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) setState(() => _showDropdown = false);
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        style: const TextStyle(color: kText, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: 'Ex: Push, Pull, Legs, Full Body...',
+          hintStyle: const TextStyle(color: Color(0xFF444444), fontSize: 13),
+          filled: true, fillColor: kCard2,
+          prefixIcon: const Icon(Icons.label_rounded, color: kTextDim, size: 18),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kOrange, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        ),
+        onTap: () => setState(() => _showDropdown = true),
+        onChanged: (_) => setState(() => _showDropdown = true),
+      ),
+      if (_showDropdown && _filtered.isNotEmpty) Container(
+        constraints: const BoxConstraints(maxHeight: 160),
+        decoration: BoxDecoration(color: kCard2, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
+        child: ListView(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          children: _filtered.map((s) => Clickable(
+            onTap: () {
+              setState(() {
+                widget.controller.text = s;
+                _showDropdown = false;
+              });
+              _focusNode.unfocus();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: kBorder.withOpacity(0.5)))),
+              child: Row(children: [
+                const Icon(Icons.fitness_center_rounded, size: 14, color: kOrange),
+                const SizedBox(width: 10),
+                Text(s, style: const TextStyle(fontSize: 13, color: kText)),
+              ]),
+            ),
+          )).toList(),
+        ),
+      ),
+    ]);
+  }
+}
 // ===================== PROFILE PAGE V2 =====================
 class ProfilePageV2 extends StatefulWidget {
   final Map<String, String> userData;
